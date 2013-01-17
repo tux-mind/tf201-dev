@@ -10010,30 +10010,6 @@ diff -uNr kernel-2a4a095/config_from_proc linux-3.1.10/config_from_proc
 +CONFIG_NLATTR=y
 +# CONFIG_AVERAGE is not set
 +# CONFIG_CORDIC is not set
-diff -uNr kernel-2a4a095/drivers/input/asusec/asusdec.c linux-3.1.10/drivers/input/asusec/asusdec.c
---- kernel-2a4a095/drivers/input/asusec/asusdec.c	2012-09-13 08:32:35.000000000 +0200
-+++ linux-3.1.10/drivers/input/asusec/asusdec.c	2013-01-11 19:01:44.580000001 +0100
-@@ -2348,7 +2348,7 @@
- 			kobject_uevent_env(&ec_chip->dock_sdev.dev->kobj, KOBJ_CHANGE, envp);
- 			break;
- 		case ASUSDEC_TP_CONTROL:
--			ASUSDEC_NOTICE("ASUSDEC_TP_CONTROL\n");
-+			ASUSDEC_NOTICE("ASUSDEC_TP_CONTROL cmd=%X\n",cmd);
- 			if ((ec_chip->op_mode == 0) && ec_chip->dock_in){
- 				err = asusdec_tp_control(arg);
- 				return err;
-diff -uNr kernel-2a4a095/drivers/input/asusec/asusdec.h linux-3.1.10/drivers/input/asusec/asusdec.h
---- kernel-2a4a095/drivers/input/asusec/asusdec.h	2012-09-13 08:32:35.000000000 +0200
-+++ linux-3.1.10/drivers/input/asusec/asusdec.h	2013-01-15 17:01:17.189995137 +0100
-@@ -7,7 +7,7 @@
- /*
-  * compiler option
-  */
--#define ASUSDEC_DEBUG			0
-+#define ASUSDEC_DEBUG			1
- #define TOUCHPAD_MODE			1	// 0: relative mode, 1: absolute mode
- #define TOUCHPAD_ELAN			1	// 0: not elan, 1:elantech
- #define DOCK_SPEAKER			0	// 0: not ready, 1: ready
 diff -uNr kernel-2a4a095/drivers/ril/ril.c linux-3.1.10/drivers/ril/ril.c
 --- kernel-2a4a095/drivers/ril/ril.c	2012-09-13 08:32:35.000000000 +0200
 +++ linux-3.1.10/drivers/ril/ril.c	2012-11-26 19:38:59.000000000 +0100
