@@ -4,13 +4,15 @@ this is the development resource for get any linux distro works on the TF201.
 since asus used andoird and the linux kernel all of her code it's under GPL v2.
 thus we are free to edit and redistribush that.
 
-in the JBkernel you can find the actual kernel that i'm using.
-the JBkernel/.config.default is the deafult config from asus, while the .config is the current one.
-i applied the "channel-negative-one-maxim.patch" from the aircrack-ng svn.
-thus for make wardriving easier.
+in the kernel directory you can find the .config.default that is the default config from asus,
+the .config which is the current configuration of the kernel.
+the JB15.patch is the patch to apply to the official kernel, it can be found here: http://dlcdnet.asus.com/pub/ASUS/EeePAD/TF201/kernel_V10_4_2_15.zip .
+quite all the changes are for get the kernel compile fine.
+i also applied the channel-negative-one-maxim.patch for make wardriving easier.
 
 in the test folder you can find all my work-stuff.
-it contains myinit which is the current initramfs, abootimg which is the abootimg tool.
+it contains myinit which is the current initramfs.
+for work properly you need abootimg.
 
 tha folder touchpad_control contains a small program for send TOUCHPAD_ON/OFF to the asusdec ioctl.
 the folder boot_chooser contains the main init program that choose what OS booting.
@@ -19,6 +21,3 @@ now i'm working on getting the elantech_touchpad working.
 that is a PS2 mouse over the i2c bus.
 
 i think that's only a Xorg-related driver/configuration setting.
-
-i have to go now,
-more update in the near future ;)
