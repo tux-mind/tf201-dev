@@ -1,0 +1,3 @@
+These patches apply to Asus's stock 3.1.10 kernel: kernel_v10_4_2_15.zip.
+JB15: Fixes a compile error, adds our .config file.
+asusdec.h: Removes debug messages.
