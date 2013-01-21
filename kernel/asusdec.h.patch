@@ -1,0 +1,28 @@
+--- stock-kernel/drivers/input/asusec/asusdec.h	2012-09-13 08:32:35.000000000 +0200
++++ linux/drivers/input/asusec/asusdec.h	2013-01-21 16:39:43.490024735 +0100
+@@ -25,14 +25,14 @@
+ 						for (i = 0; i < array[0]+1; i++) \
+ 							ASUSDEC_INFO("ec_data[%d] = 0x%x\n", i, array[i]);	\
+ 					} while(0)
++#define ASUSDEC_NOTICE(format, arg...)  \
++        printk(KERN_NOTICE "asusdec: [%s] " format , __FUNCTION__ , ## arg)
+ #else
+ #define ASUSDEC_INFO(format, arg...)	 
+ #define ASUSDEC_I2C_DATA(array, i)
++#define ASUSDEC_NOTICE(format, arg...)
+ #endif
+ 
+-#define ASUSDEC_NOTICE(format, arg...)	\
+-	printk(KERN_NOTICE "asusdec: [%s] " format , __FUNCTION__ , ## arg)
+-
+ #define ASUSDEC_ERR(format, arg...)	\
+ 	printk(KERN_ERR "asusdec: [%s] " format , __FUNCTION__ , ## arg)
+ 
+@@ -45,7 +45,6 @@
+ #define ASUSDEC_I2C_ERR_TOLERANCE	8
+ #define ASUSDEC_RETRY_COUNT		3
+ #define ASUSDEC_POLLING_RATE		80
+-
+ #define ASUSDEC_OBF_MASK		0x1
+ #define ASUSDEC_KEY_MASK		0x4
+ #define ASUSDEC_KBC_MASK		0x8
