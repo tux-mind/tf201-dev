@@ -3,3 +3,4 @@ get the elantech_touchpad working properly.
 get sound.
 get the video shared memory works. ( thus to have composing )
 make UI application for boot_chooser.
+check for abootimg, fastboot and blobpack executable in scripts.
