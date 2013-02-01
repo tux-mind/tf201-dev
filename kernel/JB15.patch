@@ -435,7 +435,7 @@ diff -urNw stock-kernel/drivers/input/asusec/elan_i2c_hack.c linux/drivers/input
 +	/*int i;*/
 +	int fingers;
 +	int position_x, position_y;
-+	int mkx_value/*, mky_value, h_value*/;
++	int mkx_value/*, mky_value*/, h_value;
 +
 +	//print_hex_dump_bytes("hacking: ", DUMP_PREFIX_NONE, packet,6);
 +
@@ -477,6 +477,7 @@ diff -urNw stock-kernel/drivers/input/asusec/elan_i2c_hack.c linux/drivers/input
 +	position_x = ((packet[1] & 0x0f) << 8) | packet[2];
 +	position_y = touch->max_y - (((packet[4] & 0x0f) << 8) | packet[5]);
 +	mkx_value = ((packet[0] & 0x30) >> 2) | ((packet[3] & 0x30) >> 4);
++	h_value = ((packet[4] & 0xf0) >> 4) | (packet[1] & 0xf0);
 +
 +	input_report_key(input, BTN_LEFT, (packet[0] & 0x01));
 +	input_report_key(input, BTN_RIGHT, (packet[0] & 0x02) >> 1);
@@ -490,6 +491,7 @@ diff -urNw stock-kernel/drivers/input/asusec/elan_i2c_hack.c linux/drivers/input
 +			input_report_abs(input, ABS_MT_POSITION_X, position_x);
 +			input_report_abs(input, ABS_MT_POSITION_Y, position_y);
 +			input_report_abs(input, ABS_MT_TOUCH_MAJOR, mkx_value);
++			input_report_abs(input, ABS_MT_PRESSURE, h_value);
 +			input_mt_slot(input, 1);
 +			input_mt_report_slot_state(input, MT_TOOL_FINGER, false);
 +			break;
@@ -502,6 +504,7 @@ diff -urNw stock-kernel/drivers/input/asusec/elan_i2c_hack.c linux/drivers/input
 +			input_report_abs(input, ABS_MT_POSITION_X, position_x);
 +			input_report_abs(input, ABS_MT_POSITION_Y, position_y);
 +			input_report_abs(input, ABS_MT_TOUCH_MAJOR, mkx_value);
++			input_report_abs(input, ABS_MT_PRESSURE, h_value);
 +			break;
 +		case 0:
 +			input_mt_slot(input, 0);
