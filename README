@@ -5,11 +5,9 @@ o kernel/ contains patches to the Asus stock 3.1.10 kernel (see the README in
 that directory)
 
 o test/ contains a blob file and a LNX file, generated from the Asus stock
-3.1.10 kernel.  These files will usually be *older* than what one would get
-if they comiled the kernel with our patches, but we keep the files there to
-get people started.
+3.1.10 kernel with our patches. this files are ready-to-flash.
 
 o boot_chooser/ tmux_mind's bootchooser program.
 
-o touchpad_control/ tmux's WIP for touchpad.
+o touchpad_control/ small program for activate/deactivate the touchpad.
 
