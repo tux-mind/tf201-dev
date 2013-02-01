@@ -84,15 +84,6 @@ diff -urNw stock-kernel/drivers/input/asusec/asusdec.c linux/drivers/input/asuse
  #if BATTERY_DRIVER
  		if (ec_chip->dock_type == AUDIO_DOCK) {
  			mcu_cable_type = asusAudiodec_cable_type_callback();
-@@ -2348,7 +2351,7 @@
- 			kobject_uevent_env(&ec_chip->dock_sdev.dev->kobj, KOBJ_CHANGE, envp);
- 			break;
- 		case ASUSDEC_TP_CONTROL:
--			ASUSDEC_NOTICE("ASUSDEC_TP_CONTROL\n");
-+			ASUSDEC_NOTICE("ASUSDEC_TP_CONTROL cmd=%X\n",cmd);
- 			if ((ec_chip->op_mode == 0) && ec_chip->dock_in){
- 				err = asusdec_tp_control(arg);
- 				return err;
 diff -urNw stock-kernel/drivers/input/asusec/asusdec.h linux/drivers/input/asusec/asusdec.h
 --- stock-kernel/drivers/input/asusec/asusdec.h	2012-09-13 08:32:35.000000000 +0200
 +++ linux/drivers/input/asusec/asusdec.h	2013-01-21 16:39:43.490024735 +0100
@@ -373,12 +364,12 @@ diff -urNw stock-kernel/drivers/input/asusec/elan_i2c_hack.c linux/drivers/input
 +	input_mt_init_slots(dev, ETP_MAX_FINGERS);
 +	input_set_abs_params(dev, ABS_MT_POSITION_X, 0, elantech_i2c_priv->max_x, 0, 0);
 +	input_set_abs_params(dev, ABS_MT_POSITION_Y, 0, elantech_i2c_priv->max_y, 0, 0);
-+	//input_set_abs_params(dev, ABS_MT_PRESSURE, 0, ETP_PRESSURE_MAX, 0, 0);
-+	input_set_abs_params(dev, ABS_MT_PRESSURE, 0, ETP_WMAX_V2, 0, 0);
-+	//input_set_abs_params(dev, ABS_MT_TOUCH_MAJOR, 0, ETP_PRESSURE_MAX, 0, 0);
-+	input_set_abs_params(dev, ABS_MT_TOUCH_MAJOR, 0, ETP_WMAX_V2, 0, 0);
-+	//input_set_abs_params(dev, ABS_MT_TOUCH_MINOR, 0, ETP_PRESSURE_MAX, 0, 0);
-+	input_set_abs_params(dev, ABS_MT_TOUCH_MINOR, 0, ETP_WMAX_V2, 0, 0);
++	input_set_abs_params(dev, ABS_MT_PRESSURE, 0, ETP_PRESSURE_MAX, 0, 0);
++	//input_set_abs_params(dev, ABS_MT_PRESSURE, 0, ETP_WMAX_V2, 0, 0);
++	input_set_abs_params(dev, ABS_MT_TOUCH_MAJOR, 0, ETP_PRESSURE_MAX, 0, 0);
++	//input_set_abs_params(dev, ABS_MT_TOUCH_MAJOR, 0, ETP_WMAX_V2, 0, 0);
++	input_set_abs_params(dev, ABS_MT_TOUCH_MINOR, 0, ETP_PRESSURE_MAX, 0, 0);
++	//input_set_abs_params(dev, ABS_MT_TOUCH_MINOR, 0, ETP_WMAX_V2, 0, 0);
 +
 +	/* Enable ABS mode*/
 +	//elantech_i2c_command(client, ETP_ENABLE_ABS_CMD, buf_recv, ETP_INF_LENGTH);
