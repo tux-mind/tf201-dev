@@ -1,0 +1,17 @@
+These are a collection of scrpts meant to be bound to keys (ex: for minimalistic environments)
+
+Make sure you change the variables at the top of each file to reflect your configuration
+
+brightness.sh:
+ "i" to toggle ips
+ "+" to increase
+ "-" to decrase
+ "=" to use saved value
+
+ after any operation the brightness is saved in a file (keep the same brightness across reboots)
+
+touchpad.sh:
+ "on" to enable
+ "off" to disable
+ "toggle" to toggle
+ <nothing> to use saved value

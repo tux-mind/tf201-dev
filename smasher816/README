@@ -1,0 +1,9 @@
+This is a small folder where I can dump my tf201 related files (thanks tux_mind).
+
+bin/ contains executable (python) files to interact with the hardware
+
+scripts/ contains a few bash scripts to save and change the hardware (used by xbindkeys)
+
+misc/ contains random files that may be useful to others
+
+Note: These are all files I made for personal use. You may have to edit some for them to work correctly on another setup.

@@ -1,0 +1,12 @@
+My personal config files.
+Use as an example for your own :)
+
+xbindkeysrc: A more "pc like" layout
+    Back = Escape
+    Home = Super_L (Windows Key)
+    Search = Left Alt
+    Ment = Super_R
+
+Xmodmap: keybinds for the media keys
+
+.xinitrc: Set all the things

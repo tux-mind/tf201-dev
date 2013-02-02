@@ -1,0 +1,15 @@
+xset -dpm
+xset s off
+xset s noblank
+
+xset +fp /usr/share/fonts/terminus
+xrdb -merge ~/.Xresources
+xmodmap ~/.Xmodmap
+xbindkeys -f ~/.xbindkeysrc
+
+~/bin/brightness.sh =
+~/bin/touchpad.sh
+
+while true; do
+	dwm 2>/dev/null
+done

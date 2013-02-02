@@ -1,0 +1,109 @@
+#!/usr/bin/env python
+
+import os, sys, argparse, subprocess
+
+DEV_MISC = '/dev/mmcblk0p3'
+RECOVERY_CMD = 'boot-recovery'
+BOOT_DIR = '/mnt/data/.boot.d/'
+BOOT_FILE = '/mnt/data/.boot'
+
+def removeFile(file):
+	if os.access(file, os.F_OK):
+		os.unlink(file)
+
+def readFile(file):
+	if not os.access(file, os.F_OK):
+		sys.exit('Error: ' + file + ' does not exist')
+	if not os.access(file, os.R_OK):
+		sys.exit('Error: you do not have permission to read ' + file + '\nTry running as root')
+
+	dev = open(file, 'r')
+	str = dev.read()
+	dev.close()
+	return str
+
+def writeFile(file, data):
+	if not os.access(file, os.F_OK):
+		sys.exit('Error: ' + file + ' does not exist')
+	if not os.access(file, os.W_OK):
+		sys.exit('Error: you do have permission to write ' + file + '\nTry running as root')
+
+	dev = open(file, 'w')
+	dev.write(data)
+	dev.close()
+
+def shutdown(flag, time, msg, prompt):
+	if prompt:
+		input('Press enter to continue...')
+	subprocess.call(['shutdown', flag, time, msg])
+
+def init():
+	parser = argparse.ArgumentParser(description='Boot Manager for the Asus Transformer Prime TF201')
+	parser.add_argument('mode', help='Command')
+	parser.add_argument('-t', '--time', default='now', help='Delay before shutdown')
+	parser.add_argument('-w', '--warn', default='', help='Warning message')
+	parser.add_argument('-n', '--noask', action='store_false', help='Do not warn before shutdown')
+	parser.add_argument('-r', '--reboot', action='store_true', help='Reboot after changing boot target')
+	parser.add_argument('-p', '--print', action='store_true', help='Print the .boot target, instead of changing to it')
+	args = parser.parse_args()
+
+	reboot=False
+
+	if args.mode == 'help':
+		print('Available commands:')
+		print('help - show this message')
+		print('cancel - cancel a pending shutdown')
+		print('shutdown - power off the device')
+		print('reboot - reboot the device')
+		print('android - reboot to android')
+		print('recovery - reboot to recovery')
+		print('norecovery - clear the recovery flag')
+		print('list - list available targets')
+		print('current - print the current boot device')	
+		print('<anything else> - change the .boot target')
+
+	elif args.mode == 'cancel':
+		subprocess.call(['shutdown', '-c', args.warn])
+	elif args.mode == 'shutdown':
+		shutdown('-h', args.time, args.warn, args.noask)
+	elif args.mode == 'reboot':
+		reboot=True
+
+	elif args.mode == 'android':
+		removeFile(BOOT_FILE)
+		print('Next boot will be to android (no .boot)')
+		if args.reboot: reboot=True
+	elif args.mode == 'recovery':
+		writeFile(DEV_MISC, RECOVERY_CMD) #WARNING! Dirctly writing to a partition could be very dangerous
+		print('Next boot will be to recovery ("' + RECOVERY_CMD + '" > ' + DEV_MISC + ')')
+		if args.reboot: reboot=True
+	elif args.mode == 'norecovery':
+		writeFile(DEV_MISC, "             ")
+		print('Next boot will not go to recovery')
+		if args.reboot: reboot=True
+
+	elif args.mode == 'list':
+		print('Available targets:')
+		for i, file in enumerate( os.listdir(BOOT_DIR) ):
+			print('\t' + file)
+	elif args.mode == 'current':
+		if os.access(BOOT_FILE, os.F_OK):
+			print( readFile(BOOT_FILE) ) #ADD TARGET NAME
+		else:
+			print(BOOT_FILE + ' does not exist\nFalling back to default mode (android)')
+
+	else: # .boot.d
+		if args.print:
+			print( readFile(BOOT_DIR+args.mode) )
+		elif os.access(BOOT_DIR+args.mode, os.F_OK | os.R_OK):
+			data = readFile(BOOT_DIR+args.mode)
+			writeFile(BOOT_FILE, data)
+			print( 'Next boot will be to ' + args.mode + ' (' + str.strip(data) + ')' )
+			if args.reboot: reboot=True
+		else:
+			sys.exit('Error: "' + args.mode + '" is not a valid boot choice\n\nUse "help" to see commands\nAdd .boot config files to ' + BOOT_DIR + '\n\n')
+
+	if reboot:
+		shutdown('-r', args.time, args.warn, args.noask)
+
+init()
