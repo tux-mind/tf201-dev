@@ -1,14 +1,6 @@
-diff -urNw stock-kernel/drivers/input/asusec/Makefile linux/drivers/input/asusec/Makefile
---- stock-kernel/drivers/input/asusec/Makefile	2012-09-13 08:32:35.000000000 +0200
-+++ linux/drivers/input/asusec/Makefile	2013-01-31 11:10:05.670032325 +0100
-@@ -1,3 +1,4 @@
- obj-$(CONFIG_ASUSPEC)		+= asuspec.o
- obj-$(CONFIG_ASUSDEC)		+= asusdec.o
- obj-$(CONFIG_ASUSDEC)		+= elan_i2c_asus.o
-+obj-$(CONFIG_ASUSDEC)		+= elan_i2c_hack.o
 diff -urNw stock-kernel/drivers/input/asusec/asusdec.c linux/drivers/input/asusec/asusdec.c
 --- stock-kernel/drivers/input/asusec/asusdec.c	2012-09-13 08:32:35.000000000 +0200
-+++ linux/drivers/input/asusec/asusdec.c	2013-01-31 11:16:47.370000664 +0100
++++ linux/drivers/input/asusec/asusdec.c	2013-02-01 01:16:38.970000669 +0100
 @@ -453,7 +453,7 @@
  static void asusdec_fw_reset_ec_op(void){
  	char i2c_data[32];
@@ -114,41 +106,240 @@ diff -urNw stock-kernel/drivers/input/asusec/asusdec.h linux/drivers/input/asuse
  #define ASUSDEC_KEY_MASK		0x4
  #define ASUSDEC_KBC_MASK		0x8
 diff -urNw stock-kernel/drivers/input/asusec/elan_i2c_asus.c linux/drivers/input/asusec/elan_i2c_asus.c
---- stock-kernel/drivers/input/asusec/elan_i2c_asus.c   2012-09-13 08:32:35.000000000 +0200
-+++ linux/drivers/input/asusec/elan_i2c_asus.c  2013-02-01 08:09:35.610008748 +0100
-@@ -30,7 +30,9 @@
-        int i;
-        int retry_data_count;
-        u8 i2c_data[16];
+--- stock-kernel/drivers/input/asusec/elan_i2c_asus.c	2012-09-13 08:32:35.000000000 +0200
++++ linux/drivers/input/asusec/elan_i2c_asus.c	2013-02-02 02:38:59.330003817 +0100
+@@ -6,6 +6,7 @@
+ #include <linux/interrupt.h>
+ #include <linux/init.h>
+ #include <linux/input.h>
++#include <linux/input/mt.h>
+ #include <asm/gpio.h>
+ #include <linux/workqueue.h>
+ #include <linux/cdev.h>
+@@ -30,7 +31,9 @@
+ 	int i;
+ 	int retry_data_count;
+ 	u8 i2c_data[16];
 +#if ASUSDEC_DEBUG
-        int index;
+ 	int index;
 +#endif
 
-        ELAN_INFO("command = 0x%x\n",command);
-        asus_ec_cmd = (((command & 0x00ff) << 8) | 0xD4);
-@@ -74,6 +76,11 @@
-
- }
-
-+int elan_i2c_asus_cmd_hack(struct i2c_client *client,unsigned char *param, int command)
-+{
-+       return elan_i2c_asus_cmd(client,param,command);
-+}
-+
+ 	ELAN_INFO("command = 0x%x\n",command);
+ 	asus_ec_cmd = (((command & 0x00ff) << 8) | 0xD4);
+@@ -77,95 +80,68 @@
  /*
   * Interpret complete data packets and report absolute mode input events for
   * hardware version 2. (6 byte packets)
-@@ -94,6 +101,9 @@
-        dev = etd->abs_dev;
-        packet = ec_chip->ec_data;
++ * HACKED version: don't write anything in asus structs,
++ * just report position/keys/pressure to kernel.
+  */
+ void elantech_report_absolute_to_related(struct asusdec_chip *ec_chip, int *Null_data_times)
+ {
+-	struct elantech_data *etd;
+ 	struct input_dev *dev;
+ 	unsigned char *packet;
+-	unsigned int fingers;
+-	unsigned int width = 0;
+-	int left_button, right_button;
+-	int x, y;
+-	int last_fingers;
+-	int i;
++	int fingers,x,y,h_value,width;
 
-+       // call hack handler
-+       elantech_report_hack_absolute_v2(ec_chip->private->hack_dev, packet);
+-	etd = (struct elantech_data *) ec_chip->private;
+-	dev = etd->abs_dev;
+- 	packet = ec_chip->ec_data;
++	/* fingers => how many fingers are now on the touchpad
++	 * x => current X position
++	 * y => current y position
++	 * h_value => current Z position ( pressure on the touchpad )
++	 * width => width of touched area
++	 */
+
+-	// Report multitouch events for fingers.
++	packet = ec_chip->ec_data;
++	dev = ec_chip->private->abs_dev;
+ 	fingers = (packet[0] & 0xc0) >> 6;
+ 	x = ((packet[1] & 0x0f) << 8) | packet[2];
+-	y = etd->ymax - (((packet[4] & 0x0f) << 8) | packet[5]);
+-	//printk("fingers=%d, x=%d, y=%d, packet=%02x,%02x,%02x,%02x,%02x,%02x\n", fingers, x, y, packet[0], packet[1], packet[2], packet[3], packet[4], packet[5]);
++	y = ETP_YMAX_V2 - (((packet[4] & 0x0f) << 8) | packet[5]);
+         width = ((packet[0] & 0x30) >> 2) | ((packet[3] & 0x30) >> 4);
++	h_value = ((packet[4] & 0xf0) >> 4) | (packet[1] & 0xf0);
+
+-	last_fingers = etd->fingers;
+-
+-	switch (fingers) {
+-		case 0:
+-			// No fingers down.
+-			etd->fingers = 0;
+-			break;
++	input_report_key(dev, BTN_LEFT, (packet[0] & 0x01));
++	input_report_key(dev, BTN_RIGHT, (packet[0] & 0x02) >> 1);
++	input_report_key(dev, BTN_TOUCH, fingers != 0);
++	input_report_key(dev, BTN_TOOL_FINGER, fingers == 1);
++	input_report_key(dev, BTN_TOOL_DOUBLETAP, fingers == 2);
++	input_report_key(dev, BTN_TOOL_TRIPLETAP, fingers == 3);
++	input_report_key(dev, BTN_TOOL_QUADTAP, fingers == 4);
+
++	switch(fingers)
++	{
+ 		case 1:
+-			// One finger down.
+-			etd->fingers = 1;
+-			etd->pos[0].x = x;
+-			etd->pos[0].y = y;
++			input_mt_slot(dev, 0);
++			input_mt_report_slot_state(dev, MT_TOOL_FINGER, true);
++			input_report_abs(dev, ABS_MT_POSITION_X, x);
++			input_report_abs(dev, ABS_MT_POSITION_Y, y);
++			input_report_abs(dev, ABS_MT_TOUCH_MAJOR, width);
++			input_report_abs(dev, ABS_MT_PRESSURE, h_value);
++			input_mt_slot(dev, 1);
++			input_mt_report_slot_state(dev, MT_TOOL_FINGER, false);
+ 			break;
+-
+ 		case 2:
+-			// Two fingers down.
+-			// Wait to get data from both fingers.
+-			if (etd->fingers != 2) {
+-				etd->fingers = 2;
+-				etd->pos[0].x = -1;
+-				etd->pos[1].x = -1;
+-			}
+-			if ((packet[0] & 0x0c) == 0x04) {
+-				etd->pos[0].x = x;
+-				etd->pos[0].y = y;
+-			} else {
+-				etd->pos[1].x = x;
+-				etd->pos[1].y = y;
+-			}
+-			if (etd->pos[0].x < 0 || etd->pos[1].x < 0)
+-				return;
+-			break;
+-
+-		case 3:
+-			// Three or more fingers down.
+-			// Wait for at least one finger to go up.
+-			return;
+-	}
+-
+-	// Send finger reports.
+-	if (etd->fingers) {
+-		for (i = 0; i < etd->fingers; i++) {
++			if ((packet[0] & 0x0c) == 0x04) // custom asus stuff i think...
++				input_mt_slot(dev, 0); // this tell us if current data is related to finger 1 or 2
++			else
++				input_mt_slot(dev, 1);
++			input_mt_report_slot_state(dev, MT_TOOL_FINGER, true);
++			input_report_abs(dev, ABS_MT_POSITION_X, x);
++			input_report_abs(dev, ABS_MT_POSITION_Y, y);
+ 			input_report_abs(dev, ABS_MT_TOUCH_MAJOR, width);
+-			input_report_abs(dev, ABS_MT_POSITION_X, etd->pos[i].x);
+-			input_report_abs(dev, ABS_MT_POSITION_Y, etd->pos[i].y);
+-			input_mt_sync(dev);
+-		}
+-	} else if (last_fingers) {
+-		input_mt_sync(dev);
+-	}
+-
+-	// Send button press / release events.
+-	left_button = (packet[0] & 0x01);
+-	if (left_button != etd->left_button) {
+-		input_report_key(dev, BTN_LEFT, left_button);
+-		etd->left_button = left_button;
+-	}
+-
+-	right_button = (packet[0] & 0x02) >> 1;
+-	if (right_button != etd->right_button) {
+-		input_report_key(dev, BTN_RIGHT, right_button);
+-		etd->right_button = right_button;
++			input_report_abs(dev, ABS_MT_PRESSURE, h_value);
++			break;
++		case 0:
++			input_mt_slot(dev, 0);
++			input_mt_report_slot_state(dev, MT_TOOL_FINGER, false);
++			input_mt_slot(dev, 1);
++			input_mt_report_slot_state(dev, MT_TOOL_FINGER, false);
+ 	}
+-
++	input_mt_report_pointer_emulation(dev, true);
+ 	input_sync(dev);
+ }
+
+@@ -195,13 +171,13 @@
+ 	return -1;
+ }
+
+-
+ /*
+  * Set the appropriate event bits for the input subsystem
+  */
+ static int elantech_set_input_rel_params(struct asusdec_chip *ec_chip)
+ {
+ 	struct elantech_data *etd = ec_chip->private;
++	struct input_dev *dev;
+ 	unsigned char param[3];
+ 	int ret;
+
+@@ -224,11 +200,12 @@
+ 		etd->xmax = (0x0F & param[0]) << 8 | param[1];
+ 		etd->ymax = (0xF0 & param[0]) << 4 | param[2];
+
+-		etd->abs_dev = input_allocate_device();
++		dev = etd->abs_dev = input_allocate_device();
+ 		ELAN_INFO("1 elantech_touchscreen=%p\n",etd->abs_dev);
+ 		if (etd->abs_dev != NULL){
+ 			ELAN_INFO("2 elantech_touchscreen=%p\n",etd->abs_dev);
+ 			etd->abs_dev->name = "elantech_touchscreen";
++			/* STOCK ASUS
+ 			etd->abs_dev->evbit[0] = BIT_MASK(EV_KEY) | BIT_MASK(EV_SYN);
+ 			etd->abs_dev->keybit[BIT_WORD(BTN_MOUSE)] = BIT_MASK(BTN_LEFT) | BIT_MASK(BTN_RIGHT);
+
+@@ -238,6 +215,42 @@
+ 			input_set_abs_params(etd->abs_dev, ABS_MT_POSITION_X, 0, etd->xmax, 0, 0);
+ 			input_set_abs_params(etd->abs_dev, ABS_MT_POSITION_Y, 0, etd->ymax, 0, 0);
+ 			input_set_abs_params(etd->abs_dev, ABS_MT_TOUCH_MAJOR, 0, ETP_WMAX_V2, 0, 0);
++			*/
 +
-        // Report multitouch events for fingers.
-        fingers = (packet[0] & 0xc0) >> 6;
-        x = ((packet[1] & 0x0f) << 8) | packet[2];
-@@ -252,7 +262,6 @@
++			// DEFAULT from elantech.c
++
++			dev->phys = ec_chip->client->adapter->name;
++			dev->id.bustype = BUS_I2C;
++
++			__set_bit(EV_KEY, dev->evbit);
++			__set_bit(EV_ABS, dev->evbit);
++			__clear_bit(EV_REL, dev->evbit);
++
++			__set_bit(BTN_LEFT, dev->keybit);
++			__set_bit(BTN_RIGHT, dev->keybit);
++
++			__set_bit(BTN_TOUCH, dev->keybit);
++			__set_bit(BTN_TOOL_FINGER, dev->keybit);
++			__set_bit(BTN_TOOL_DOUBLETAP, dev->keybit);
++			__set_bit(BTN_TOOL_TRIPLETAP, dev->keybit);
++			__set_bit(BTN_TOOL_QUADTAP, dev->keybit);
++
++			__set_bit(INPUT_PROP_SEMI_MT, dev->propbit);
++
++			/* Touch area X Y Value */
++			input_set_abs_params(dev, ABS_X, ETP_XMIN_V2, ETP_XMAX_V2, 0, 0);
++			input_set_abs_params(dev, ABS_Y, ETP_YMIN_V2, ETP_YMAX_V2, 0, 0);
++			/* Finger Pressure value */
++			input_set_abs_params(dev, ABS_MT_PRESSURE, ETP_PMIN_V2, ETP_PMAX_V2, 0, 0);
++
++			/* Palme Value */
++			input_set_abs_params(dev, ABS_MT_TOUCH_MAJOR, ETP_WMIN_V2, ETP_WMAX_V2, 0, 0);
++
++			/* Fingers X Y values */
++			input_mt_init_slots(dev, 2);
++			input_set_abs_params(dev, ABS_MT_POSITION_X, ETP_XMIN_V2, ETP_XMAX_V2, 0, 0);
++			input_set_abs_params(dev, ABS_MT_POSITION_Y, ETP_YMIN_V2, ETP_YMAX_V2, 0, 0);
++
+
+ 			ret=input_register_device(etd->abs_dev);
+ 			if (ret) {
+@@ -252,7 +265,6 @@
 
  }
 
@@ -156,298 +347,61 @@ diff -urNw stock-kernel/drivers/input/asusec/elan_i2c_asus.c linux/drivers/input
  /*
   * Use magic knock to detect Elantech touchpad
   */
-@@ -291,8 +300,12 @@
-  */
- int elantech_init(struct asusdec_chip *ec_chip)
+@@ -293,6 +305,7 @@
  {
-+       struct input_dev *itmp;
-+       int ret;
-+
-        ELAN_INFO("Elan et1059 elantech_init\n");
+ 	ELAN_INFO("Elan et1059 elantech_init\n");
 
 +
-        if (elantech_set_absolute_mode(ec_chip)){
-                ELAN_ERR("failed to put touchpad into absolute mode.\n");
-                return -1;
-@@ -301,6 +314,22 @@
-                ELAN_ERR("failed to elantech_set_input_rel_params.\n");
-                return -1;
-        }
+ 	if (elantech_set_absolute_mode(ec_chip)){
+ 		ELAN_ERR("failed to put touchpad into absolute mode.\n");
+ 		return -1;
+@@ -301,6 +314,7 @@
+ 		ELAN_ERR("failed to elantech_set_input_rel_params.\n");
+ 		return -1;
+ 	}
 +
-+       itmp = elantech_create_hack_input(ec_chip->client);
-+       if(itmp)
-+       {
-+               if((ret = input_register_device(itmp)) < 0)
-+               {
-+                       printk("hacking: failed to registrate device [%d]\n",ret);
-+                       input_free_device(itmp);
-+               }
-+               else
-+               {
-+                       ec_chip->private->hack_dev = itmp;
-+               }
-+       }
-+       else
-+               printk("hacking: elantech_create_hack_input return NULL\n");
-        //elan_i2c_asus_cmd(ec_chip->client,  NULL, PSMOUSE_CMD_ENABLE);
-        return 0;
+ 	//elan_i2c_asus_cmd(ec_chip->client,  NULL, PSMOUSE_CMD_ENABLE);
+ 	return 0;
  }
 diff -urNw stock-kernel/drivers/input/asusec/elan_i2c_asus.h linux/drivers/input/asusec/elan_i2c_asus.h
---- stock-kernel/drivers/input/asusec/elan_i2c_asus.h   2012-09-13 08:32:35.000000000 +0200
-+++ linux/drivers/input/asusec/elan_i2c_asus.h  2013-02-01 08:08:53.850008683 +0100
+--- stock-kernel/drivers/input/asusec/elan_i2c_asus.h	2012-09-13 08:32:35.000000000 +0200
++++ linux/drivers/input/asusec/elan_i2c_asus.h	2013-02-01 13:47:42.850001138 +0100
 @@ -2,6 +2,7 @@
  #define _ELAN_I2C_ASUS_H
 
  #include "asusdec.h"
 +#include <linux/input.h>
 
- #define ELAN_DEBUG                     0
+ #define ELAN_DEBUG			0
  #if ELAN_DEBUG
 @@ -99,7 +100,7 @@
   * Hence the X and Y ranges are doubled too.
   * The bezel around the pad also appears to be smaller
   */
--#define ETP_EDGE_FUZZ_V2               0
-+#define ETP_EDGE_FUZZ_V2               8
+-#define ETP_EDGE_FUZZ_V2		0
++#define ETP_EDGE_FUZZ_V2		8
 
- #define ETP_XMIN_V2                    (   0 + ETP_EDGE_FUZZ_V2)
- #define ETP_XMAX_V2                    (1152 - ETP_EDGE_FUZZ_V2)
+ #define ETP_XMIN_V2			(   0 + ETP_EDGE_FUZZ_V2)
+ #define ETP_XMAX_V2			(1152 - ETP_EDGE_FUZZ_V2)
 @@ -109,11 +110,16 @@
  #define ETP_WMIN_V2                     0
  #define ETP_WMAX_V2                     15
 
-+#define ETP_PMIN_V2                    0
-+#define ETP_PMAX_V2                    255
-+#define ETP_WMIN_V2                    0
-+#define ETP_WMAX_V2                    15
++#define ETP_PMIN_V2			0
++#define ETP_PMAX_V2			255
++#define ETP_WMIN_V2			0
++#define ETP_WMAX_V2			15
 +
  /*
   * For two finger touches the coordinate of each finger gets reported
   * separately but with reduced resolution.
   */
--#define ETP_2FT_FUZZ                   0
-+#define ETP_2FT_FUZZ                   4
+-#define ETP_2FT_FUZZ			0
++#define ETP_2FT_FUZZ			4
 
- #define ETP_2FT_XMIN                   (  0 + ETP_2FT_FUZZ)
- #define ETP_2FT_XMAX                   (288 - ETP_2FT_FUZZ)
-@@ -132,11 +138,15 @@
-        struct { int x, y; } pos[2];
+ #define ETP_2FT_XMIN			(  0 + ETP_2FT_FUZZ)
+ #define ETP_2FT_XMAX			(288 - ETP_2FT_FUZZ)
 
-        struct input_dev *abs_dev;
-+       struct input_dev *hack_dev;
- };
-
-+int elan_i2c_asus_cmd_hack(struct i2c_client *,unsigned char *, int);
- int elantech_detect(struct asusdec_chip *ec_chip);
- int elantech_init(struct asusdec_chip *ec_chip);
- void elantech_report_absolute_to_related(struct asusdec_chip *ec_chip, int *Null_data_times);
-+struct input_dev *elantech_create_hack_input(struct i2c_client *);
-+void elantech_report_hack_absolute_v2(struct input_dev *, unsigned char *);
- #endif
-
-
-diff -urNw stock-kernel/drivers/input/asusec/elan_i2c_hack.c linux/drivers/input/asusec/elan_i2c_hack.c
---- stock-kernel/drivers/input/asusec/elan_i2c_hack.c	1970-01-01 01:00:00.000000000 +0100
-+++ linux/drivers/input/asusec/elan_i2c_hack.c	2013-01-31 13:49:39.780000503 +0100
-@@ -0,0 +1,241 @@
-+/*
-+ * Elantech Touchpad driver (v6) : asusdec hack
-+ *
-+ * Copyright (C) 2007-2009 Arjan Opmeer <arjan@opmeer.net>
-+ * Copyright (C) 2013 Massimo Dragano <massimo.dragano@gmail.com>
-+ *
-+ * This program is free software; you can redistribute it and/or modify it
-+ * under the terms of the GNU General Public License version 2 as published
-+ * by the Free Software Foundation.
-+ *
-+ * Trademarks are the property of their respective owners.
-+ */
-+
-+#include <linux/delay.h>
-+#include <linux/device.h>
-+#include <linux/gpio.h>
-+#include <linux/i2c.h>
-+#include <linux/init.h>
-+#include <linux/input.h>
-+#include <linux/input/mt.h>
-+#include <linux/interrupt.h>
-+#include <linux/module.h>
-+#include <linux/slab.h>
-+#include <linux/input/mt.h>
-+#include <linux/workqueue.h>
-+#include "elan_i2c_asus.h"
-+
-+struct input_dev *elantech_create_hack_input(struct i2c_client *client)
-+{
-+	struct input_dev *dev;
-+	unsigned char dummy_buff[2];
-+
-+	dev = input_allocate_device();
-+	if (dev == NULL)
-+		return NULL;
-+
-+	dev->name = "Elantech Touchpad";
-+	dev->phys = client->adapter->name;
-+	dev->id.bustype = BUS_I2C;
-+
-+	__set_bit(EV_KEY, dev->evbit);
-+	__set_bit(EV_ABS, dev->evbit);
-+	__clear_bit(EV_REL, dev->evbit);
-+
-+	__set_bit(BTN_LEFT, dev->keybit);
-+	__set_bit(BTN_RIGHT, dev->keybit);
-+
-+	__set_bit(BTN_TOUCH, dev->keybit);
-+	__set_bit(BTN_TOOL_FINGER, dev->keybit);
-+	__set_bit(BTN_TOOL_DOUBLETAP, dev->keybit);
-+	__set_bit(BTN_TOOL_TRIPLETAP, dev->keybit);
-+	__set_bit(BTN_TOOL_QUADTAP, dev->keybit);
-+
-+	__set_bit(INPUT_PROP_SEMI_MT, dev->propbit);
-+
-+	if ((elan_i2c_asus_cmd_hack(client, NULL, ETP_PS2_CUSTOM_COMMAND)) ||
-+	    (elan_i2c_asus_cmd_hack(client, NULL, 0x0000)) ||
-+	    (elan_i2c_asus_cmd_hack(client, dummy_buff, PSMOUSE_CMD_GETINFO))
-+		 )
-+	{
-+		input_free_device(dev);
-+		return NULL;
-+	}
-+
-+	/* X Y Value */
-+	input_set_abs_params(dev, ABS_X, ETP_XMIN_V2, ETP_XMAX_V2, 0, 0);
-+	input_set_abs_params(dev, ABS_Y, ETP_YMIN_V2, ETP_YMAX_V2, 0, 0);
-+	/* Finger Pressure value */
-+	input_set_abs_params(dev, ABS_PRESSURE, ETP_PMIN_V2, ETP_PMAX_V2, 0, 0);
-+
-+	/* Palme Value */
-+	input_set_abs_params(dev, ABS_TOOL_WIDTH, ETP_WMIN_V2, ETP_WMAX_V2, 0, 0);
-+
-+	/* per finger X Y values */
-+	input_mt_init_slots(dev, 2);
-+	input_set_abs_params(dev, ABS_MT_POSITION_X, ETP_XMIN_V2, ETP_XMAX_V2, 0, 0);
-+	input_set_abs_params(dev, ABS_MT_POSITION_Y, ETP_YMIN_V2, ETP_YMAX_V2, 0, 0);
-+
-+	/* Enable ABS mode*/
-+	if ((elan_i2c_asus_cmd_hack(client, NULL, ETP_PS2_CUSTOM_COMMAND)) ||
-+			(elan_i2c_asus_cmd_hack(client, NULL, ETP_REGISTER_RW)) ||
-+			(elan_i2c_asus_cmd_hack(client, NULL, ETP_PS2_CUSTOM_COMMAND)) ||
-+			(elan_i2c_asus_cmd_hack(client, NULL, 0x0010)) ||
-+			(elan_i2c_asus_cmd_hack(client, NULL, ETP_PS2_CUSTOM_COMMAND)) ||
-+			(elan_i2c_asus_cmd_hack(client, NULL, 0x03)) || // reg_10
-+			(elan_i2c_asus_cmd_hack(client, NULL, PSMOUSE_CMD_SETSCALE11)))
-+	{
-+		input_free_device(dev);
-+		return NULL;
-+	}
-+
-+	return dev;
-+}
-+
-+void elantech_set_slot(struct input_dev *dev, int slot, bool active,
-+			      unsigned int x, unsigned int y)
-+{
-+	input_mt_slot(dev, slot);
-+	input_mt_report_slot_state(dev, MT_TOOL_FINGER, active);
-+	if (active) {
-+		input_report_abs(dev, ABS_MT_POSITION_X, x);
-+		input_report_abs(dev, ABS_MT_POSITION_Y, y);
-+	}
-+}
-+
-+/* x1 < x2 and y1 < y2 when two fingers, x = y = 0 when not pressed */
-+void elantech_report_semi_mt_data(struct input_dev *dev,
-+					 unsigned int num_fingers,
-+					 unsigned int x1, unsigned int y1,
-+					 unsigned int x2, unsigned int y2)
-+{
-+	elantech_set_slot(dev, 0, num_fingers != 0, x1, y1);
-+	elantech_set_slot(dev, 1, num_fingers == 2, x2, y2);
-+}
-+
-+/*
-+ * Interpret complete data packets and report absolute mode input events for
-+ * hardware version 2. (6 byte packets)
-+ */
-+void elantech_report_hack_absolute_v2(struct input_dev *dev, unsigned char *packet)
-+{
-+	unsigned int fingers, x1 = 0, y1 = 0, x2 = 0, y2 = 0, width = 0, pres = 0;
-+
-+	/* byte 0: n1  n0   .   .   .   .   R   L */
-+	fingers = (packet[0] & 0xc0) >> 6;
-+	input_report_key(dev, BTN_TOUCH, fingers != 0);
-+
-+	switch (fingers) {
-+	case 3:
-+		/*
-+		 * Same as one finger, except report of more than 3 fingers:
-+		 * byte 3:  n4  .   w1  w0   .   .   .   .
-+		 */
-+		if (packet[3] & 0x80)
-+			fingers = 4;
-+		/* pass through... */
-+	case 1:
-+		/*
-+		 * byte 1:  .   .   .   .   .  x10 x9  x8
-+		 * byte 2: x7  x6  x5  x4  x4  x2  x1  x0
-+		 */
-+		x1 = ((packet[1] & 0x07) << 8) | packet[2];
-+		/*
-+		 * byte 4:  .   .   .   .   .   .  y9  y8
-+		 * byte 5: y7  y6  y5  y4  y3  y2  y1  y0
-+		 */
-+		y1 = ETP_YMAX_V2 - (((packet[4] & 0x03) << 8) | packet[5]);
-+
-+		input_report_abs(dev, ABS_X, x1);
-+		input_report_abs(dev, ABS_Y, y1);
-+
-+		pres = (packet[1] & 0xf0) | ((packet[4] & 0xf0) >> 4);
-+		width = ((packet[0] & 0x30) >> 2) | ((packet[3] & 0x30) >> 4);
-+		break;
-+
-+	case 2:
-+		/*
-+		 * The coordinate of each finger is reported separately
-+		 * with a lower resolution for two finger touches:
-+		 * byte 0:  .   .  ay8 ax8  .   .   .   .
-+		 * byte 1: ax7 ax6 ax5 ax4 ax3 ax2 ax1 ax0
-+		 */
-+		x1 = ((packet[0] & 0x10) << 4) | packet[1];
-+		/* byte 2: ay7 ay6 ay5 ay4 ay3 ay2 ay1 ay0 */
-+		y1 = ETP_2FT_YMAX - (((packet[0] & 0x20) << 3) | packet[2]);
-+		/*
-+		 * byte 3:  .   .  by8 bx8  .   .   .   .
-+		 * byte 4: bx7 bx6 bx5 bx4 bx3 bx2 bx1 bx0
-+		 */
-+		x2 = ((packet[3] & 0x10) << 4) | packet[4];
-+		/* byte 5: by7 by8 by5 by4 by3 by2 by1 by0 */
-+		y2 = ETP_2FT_YMAX - (((packet[3] & 0x20) << 3) | packet[5]);
-+		/*
-+		 * For compatibility with the X Synaptics driver scale up
-+		 * one coordinate and report as ordinary mouse movent
-+		 */
-+		input_report_abs(dev, ABS_X, x1 << 2);
-+		input_report_abs(dev, ABS_Y, y1 << 2);
-+
-+		/* Unknown so just report sensible values */
-+		pres = 127;
-+		width = 7;
-+		break;
-+	}
-+
-+	elantech_report_semi_mt_data(dev, fingers, x1, y1, x2, y2);
-+	input_report_key(dev, BTN_TOOL_FINGER, fingers == 1);
-+	input_report_key(dev, BTN_TOOL_DOUBLETAP, fingers == 2);
-+	input_report_key(dev, BTN_TOOL_TRIPLETAP, fingers == 3);
-+	input_report_key(dev, BTN_TOOL_QUADTAP, fingers == 4);
-+	input_report_key(dev, BTN_LEFT, packet[0] & 0x01);
-+	input_report_key(dev, BTN_RIGHT, packet[0] & 0x02);
-+	input_report_abs(dev, ABS_PRESSURE, pres);
-+	input_report_abs(dev, ABS_TOOL_WIDTH, width);
-+
-+	input_sync(dev);
-+}
-+
 diff -urNw stock-kernel/drivers/ril/ril.c linux/drivers/ril/ril.c
 --- stock-kernel/drivers/ril/ril.c	2012-09-13 08:32:35.000000000 +0200
 +++ linux/drivers/ril/ril.c	2012-11-26 19:38:59.000000000 +0100
