@@ -1,0 +1,37 @@
+#!/usr/bin/env python
+
+import os, sys, fcntl, argparse
+
+ASUSDEC="/dev/asusdec"
+ASUS_TP_CONTROL=0x8004F405
+ASUS_TP_ON=1
+ASUS_TP_OFF=0
+
+def writeFile(data, file):
+	if file==None: file=ASUSDEC
+
+	if not os.access(file, os.F_OK):
+		sys.exit('Error: ' + file + ' is not a valid device')
+	if not os.access(file, os.W_OK):
+		sys.exit('Error: you do not have permission to write to ' + file + '\nTry running as root')
+	dev = open(file, 'w')
+	fcntl.ioctl(dev, ASUS_TP_CONTROL, data)
+	dev.close()
+
+def init():
+	parser = argparse.ArgumentParser(description='Controll the Asus keyboard dock touchpad')
+	parser.add_argument('-e', '--enable', action='store_true', help='Enable the touchpad')
+	parser.add_argument('-d', '--disable', action='store_true', help='Disable the touchpad')
+	parser.add_argument('-f', '--file', action='store', help='the /dev file to use')
+	args = parser.parse_args()
+
+	if args.enable and args.disable:
+		sys.exit('Error: you can use both -e and -d')
+	elif args.enable:
+		writeFile(ASUS_TP_ON, args.file)
+	elif args.disable:
+		writeFile(ASUS_TP_OFF, args.file)
+	else:
+		sys.exit('Error: you must specify a parameter\nUse -h for help')
+
+init()
