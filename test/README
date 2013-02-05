@@ -1,7 +1,2 @@
-test.blob: a generated blob file with a 3.1.10 kernel + modified initrd
-(bootchooser) from stock ASUS.
-
-test.LNX: a generated LNX file with a 3.1.10 kernel + modified initrd
-(bootchooser) from stock ASUS.
-
-initrd.gz: a modified initrd
+folder for in-development things.
+for stable objects look at v1,v2,v3.. folders at the top of the tree.
