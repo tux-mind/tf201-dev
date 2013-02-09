@@ -1,14 +1,18 @@
 CC=arm-unknown-linux-gnueabi-gcc
+LD=arm-unknown-linux-gnueabi-ld
 CFLAGS=-Wall -g -static
+TARGET_BIN=boot_chooser
 
-all: boot_chooser android_init linux_init
+all: v3
 
+v3: boot_chooser3.o loop_mount.o
+	$(CC) $(CFLAGS) -o $(TARGET_BIN) $?
 
-boot_chooser: boot_chooser.c
-	$(CC) $(CFLAGS) -o $@ $<
+v2: boot_chooser2.c
+	$(CC) $(CFLAGS) -o $(TARGET_BIN) $<
 
-android_init: android_init.c
-	$(CC) $(CFLAGS) -o $@ $<
+v1: boot_chooser.c
+	$(CC) $(CFLAGS) -o $(TARGET_BIN) $<
 
-linux_init: linux_init.c
-	$(CC) $(CFLAGS) -o $@ $<
+%.o: %.c
+	$(CC) $(CFLAGS) -c -o $@ $<
