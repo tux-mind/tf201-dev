@@ -23,7 +23,7 @@ void mdev(char **envp)
 	waitpid(pid,NULL,0);
 }
 
-void main(int argc, char **argv, char **envp)
+int main(int argc, char **argv, char **envp)
 {
 	FILE *log,*input;
 	char 	*line, // where we place the readed line
@@ -105,7 +105,7 @@ void main(int argc, char **argv, char **envp)
 							}
 							// use i for store mount flags
 							i=0;
-							if(!loop_check(&blkdev,"/dev/loop0",&i,&fd_to_close))
+							if(!loop_check(blkdev,"/dev/loop0",&i,&fd_to_close))
 							{
 								if(!mount(blkdev,NEWROOT,"ext4",i,""))
 								{
@@ -236,5 +236,7 @@ void main(int argc, char **argv, char **envp)
 			fclose(log);
 		}
 	}
+
 	fatal(argv,envp);
+	exit(EXIT_FAILURE);
 }

@@ -33,7 +33,7 @@
 #define TIMEOUT 5 /* time to wait for external block devices ( USB stick ) */
 
 // start android init at start for give ADB access
-// #define ADB
+//#define ADB
 
 #define MDEV_ARGS { "/bin/mdev","-s",NULL }
 
@@ -43,4 +43,4 @@
 #define BOOT_FILE "/data/.boot"
 
 //from loop_mount.c
-static int loop_check(char **, const char *, int *);
+int loop_check(char *, const char *, int *, int *);
