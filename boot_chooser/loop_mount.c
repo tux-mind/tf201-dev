@@ -128,27 +128,20 @@ int set_loop(const char *device, char *file,int *fd_to_close)
  * @fd_to_close:	used for keep trace of the leaked fd of set_loop().
  */
 
-int loop_check(char **loopfile, const char *loopdev, int *flags, int *fd_to_close)
+int loop_check(char *loopfile, const char *loopdev, int *flags, int *fd_to_close)
 {
 	int res,retries;
 	struct stat st;
 
-	if (stat(*loopfile, &st) == 0 && S_ISREG(st.st_mode))
+	if (stat(loopfile, &st) == 0 && S_ISREG(st.st_mode))
   {
     *flags |=  MS_LOOP;
-		retries = 0;
-		do
-		{
-			res = set_loop(loopdev,*loopfile,fd_to_close);
-			retries++;
+		for(retries = 0; (res = set_loop(loopdev,loopfile,fd_to_close)) == 2 && retries < 3; retries++)
 			sleep(1);
-		} while(res == 2 && retries < 3);
-
 		if(res)
 			return 1;
-
-		free(*loopfile);
-		*loopfile = (char *)loopdev;
+		res = strlen(loopdev);
+		strncpy(loopfile,loopdev,res+1);
   }
   return 0;
 }

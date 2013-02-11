@@ -5,7 +5,7 @@ TARGET_BIN=boot_chooser
 
 all: v3
 
-v3: boot_chooser3.o loop_mount.o
+v3: boot_chooser3.c loop_mount.o
 	$(CC) $(CFLAGS) -o $(TARGET_BIN) $?
 
 v2: boot_chooser2.c
