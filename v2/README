@@ -1,0 +1,7 @@
+ChangeLog:
+
+o boot_chooser: now you can boot from ext image files. ( must be a partition, not the whole disk )
+o kernel: removed some extra asus debug stuff.
+o kernel: added ec_tp_enable in /sys/devices/platform/tegra-i2c.1/i2c-1/1-0019/ for got current touchpad enable status.
+o kernel: added ASUSDEC_TP_TOOGLE supportt in /dev/asusdec ioctl
+

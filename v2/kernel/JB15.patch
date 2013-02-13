@@ -1,0 +1,1853 @@
+diff -ur stock-kernel/drivers/input/asusec/asusdec.c linux/drivers/input/asusec/asusdec.c
+--- stock-kernel/drivers/input/asusec/asusdec.c	2012-09-13 08:32:35.000000000 +0200
++++ linux/drivers/input/asusec/asusdec.c	2013-02-13 16:17:21.140000288 +0100
+@@ -1,4 +1,4 @@
+-/* 
++/*
+  * ASUS Dock EC driver.
+  */
+ 
+@@ -52,6 +52,8 @@
+ 		struct device_attribute *attr,char *buf);
+ static ssize_t asusdec_tp_status_show(struct device *class,
+ 		struct device_attribute *attr,char *buf);
++static ssize_t asusdec_tp_enable_show(struct device *class,
++		struct device_attribute *attr,char *buf);
+ static ssize_t asusdec_info_show(struct device *class,
+ 		struct device_attribute *attr,char *buf);
+ static ssize_t asusdec_store_led(struct device *class,
+@@ -95,7 +97,7 @@
+ static int asusdec_lid_input_device_create(struct i2c_client *client);
+ static ssize_t asusdec_switch_name(struct switch_dev *sdev, char *buf);
+ static ssize_t asusdec_switch_state(struct switch_dev *sdev, char *buf);
+-static int asusdec_event(struct input_dev *dev, unsigned int type, unsigned int code, int value);	
++static int asusdec_event(struct input_dev *dev, unsigned int type, unsigned int code, int value);
+ static int asusdec_dock_battery_get_capacity(union power_supply_propval *val);
+ static int asusdec_dock_battery_get_status(union power_supply_propval *val);
+ static int asusdec_dock_battery_get_property(struct power_supply *psy,
+@@ -201,6 +203,7 @@
+ 
+ static DEVICE_ATTR(ec_status, S_IWUSR | S_IRUGO, asusdec_show,NULL);
+ static DEVICE_ATTR(ec_tp_status, S_IWUSR | S_IRUGO, asusdec_tp_status_show,NULL);
++static DEVICE_ATTR(ec_tp_enable, S_IWUSR | S_IRUGO, asusdec_tp_enable_show,NULL);
+ static DEVICE_ATTR(ec_info, S_IWUSR | S_IRUGO, asusdec_info_show,NULL);
+ static DEVICE_ATTR(ec_dock, S_IWUSR | S_IRUGO, asusdec_show_dock,NULL);
+ static DEVICE_ATTR(ec_dock_led, S_IWUSR | S_IRUGO, asusdec_led_show,asusdec_store_led);
+@@ -217,6 +220,7 @@
+ static struct attribute *asusdec_smbus_attributes[] = {
+ 	&dev_attr_ec_status.attr,
+ 	&dev_attr_ec_tp_status.attr,
++	&dev_attr_ec_tp_enable.attr,
+ 	&dev_attr_ec_info.attr,
+ 	&dev_attr_ec_dock.attr,
+ 	&dev_attr_ec_dock_led.attr,
+@@ -237,11 +241,11 @@
+ 	.attrs = asusdec_smbus_attributes,
+ };
+ 
+-static int asusdec_kp_sci_table[]={0, KEY_SLEEP, KEY_WLAN, KEY_BLUETOOTH, 
+-		ASUSDEC_KEY_TOUCHPAD, KEY_BRIGHTNESSDOWN, KEY_BRIGHTNESSUP, ASUSDEC_KEY_AUTOBRIGHT, 
+-		KEY_CAMERA, -9, -10, -11, 
+-		-12, -13, -14, -15, 
+-		KEY_WWW, ASUSDEC_KEY_SETTING, KEY_PREVIOUSSONG, KEY_PLAYPAUSE, 
++static int asusdec_kp_sci_table[]={0, KEY_SLEEP, KEY_WLAN, KEY_BLUETOOTH,
++		ASUSDEC_KEY_TOUCHPAD, KEY_BRIGHTNESSDOWN, KEY_BRIGHTNESSUP, ASUSDEC_KEY_AUTOBRIGHT,
++		KEY_CAMERA, -9, -10, -11,
++		-12, -13, -14, -15,
++		KEY_WWW, ASUSDEC_KEY_SETTING, KEY_PREVIOUSSONG, KEY_PLAYPAUSE,
+ 		KEY_NEXTSONG, KEY_MUTE, KEY_VOLUMEDOWN, KEY_VOLUMEUP};
+ 
+ /*
+@@ -250,7 +254,7 @@
+ static void asusdec_dockram_init(struct i2c_client *client){
+ 	dockram_client.adapter = client->adapter;
+ 	dockram_client.addr = 0x1b;
+-	dockram_client.detected = client->detected; 
++	dockram_client.detected = client->detected;
+ 	dockram_client.dev = client->dev;
+ 	dockram_client.driver = client->driver;
+ 	dockram_client.flags = client->flags;
+@@ -279,7 +283,7 @@
+ 	if (ec_chip->dock_in == 0){
+ 		return -1;
+ 	}
+-	
++
+ 	ret = i2c_smbus_read_i2c_block_data(&dockram_client, cmd, 32, ec_chip->i2c_dm_data);
+ 	if (ret < 0) {
+ 		ASUSDEC_ERR("Fail to read dockram data, status %d\n", ret);
+@@ -322,20 +326,20 @@
+ 	int retry = ASUSDEC_RETRY_COUNT;
+ 
+ 	while(retry-- > 0){
+-		asusdec_i2c_read_data(client);		
++		asusdec_i2c_read_data(client);
+ 		ASUSDEC_I2C_DATA(ec_chip->i2c_data, ec_chip->index);
+-		if ((ec_chip->i2c_data[1] & ASUSDEC_OBF_MASK) && 
+-			(!(ec_chip->i2c_data[1] & ASUSDEC_AUX_MASK))){ 
++		if ((ec_chip->i2c_data[1] & ASUSDEC_OBF_MASK) &&
++			(!(ec_chip->i2c_data[1] & ASUSDEC_AUX_MASK))){
+ 			if (ec_chip->i2c_data[2]  == res){
+ 				goto get_asusdec_keypad_i2c;
+ 			}
+-		}		
++		}
+ 		msleep(CONVERSION_TIME_MS/5);
+ 	}
+ 	return -1;
+ 
+ get_asusdec_keypad_i2c:
+-	return 0;	
++	return 0;
+ 
+ }
+ 
+@@ -344,7 +348,7 @@
+ 	int retry = ASUSDEC_RETRY_COUNT;
+ 
+ 	while(retry-- > 0){
+-		asusdec_i2c_write_data(client, 0xF400);		
++		asusdec_i2c_write_data(client, 0xF400);
+ 		if(!asusdec_keypad_get_response(client, ASUSDEC_PS2_ACK)){
+ 			goto keypad_enable_ok;
+ 		}
+@@ -357,8 +361,8 @@
+ }
+ 
+ static int asusdec_keypad_disable(struct i2c_client *client)
+-{	
+-	int retry = ASUSDEC_RETRY_COUNT;	
++{
++	int retry = ASUSDEC_RETRY_COUNT;
+ 
+ 	while(retry-- > 0){
+ 		asusdec_i2c_write_data(client, 0xF500);
+@@ -375,7 +379,7 @@
+ }
+ 
+ static void asusdec_keypad_led_on(struct work_struct *dat)
+-{	
++{
+ 	ec_chip->kbc_value = 1;
+ 	ASUSDEC_INFO("send led cmd 1\n");
+ 	msleep(250);
+@@ -384,7 +388,7 @@
+ 
+ 
+ static void asusdec_keypad_led_off(struct work_struct *dat)
+-{	
++{
+ 	ec_chip->kbc_value = 0;
+ 	ASUSDEC_INFO("send led cmd 1\n");
+ 	msleep(250);
+@@ -400,12 +404,12 @@
+ 	while(retry-- > 0){
+ 		asusdec_i2c_read_data(client);
+ 		ASUSDEC_I2C_DATA(ec_chip->i2c_data, ec_chip->index);
+-		if ((ec_chip->i2c_data[1] & ASUSDEC_OBF_MASK) && 
+-			(ec_chip->i2c_data[1] & ASUSDEC_AUX_MASK)){ 
++		if ((ec_chip->i2c_data[1] & ASUSDEC_OBF_MASK) &&
++			(ec_chip->i2c_data[1] & ASUSDEC_AUX_MASK)){
+ 			if (ec_chip->i2c_data[2] == res){
+ 				goto get_asusdec_touchpad_i2c;
+ 			}
+-		}		
++		}
+ 		msleep(CONVERSION_TIME_MS/5);
+ 	}
+ 
+@@ -413,20 +417,20 @@
+ 	return -1;
+ 
+ get_asusdec_touchpad_i2c:
+-	return 0;	
++	return 0;
+ 
+ }
+ 
+ static int asusdec_touchpad_enable(struct i2c_client *client)
+ {
+-	ec_chip->tp_wait_ack = 1;		
++	ec_chip->tp_wait_ack = 1;
+ 	asusdec_i2c_write_data(client, 0xF4D4);
+ 	return 0;
+ }
+ 
+ static int asusdec_touchpad_disable(struct i2c_client *client)
+-{	
+-	int retry = 5;	
++{
++	int retry = 5;
+ 
+ 	while(retry-- > 0){
+ 		asusdec_i2c_write_data(client, 0xF5D4);
+@@ -453,10 +457,10 @@
+ static void asusdec_fw_reset_ec_op(void){
+ 	char i2c_data[32];
+ 	int i;
+-	int r_data[32];
++	//int r_data[32];
+ 
+ 	asusdec_fw_clear_buf();
+-	
++
+ 	i2c_data[0] = 0x01;
+ 	i2c_data[1] = 0x21;
+ 	for (i = 0; i < i2c_data[0]+1 ; i++){
+@@ -468,7 +472,7 @@
+ static void asusdec_fw_address_set_op(void){
+ 	char i2c_data[32];
+ 	int i;
+-	int r_data[32];
++	//int r_data[32];
+ 
+ 	asusdec_fw_clear_buf();
+ 
+@@ -487,7 +491,7 @@
+ static void asusdec_fw_enter_op(void){
+ 	char i2c_data[32];
+ 	int i;
+-	int r_data[32];
++	//int r_data[32];
+ 
+ 	asusdec_fw_clear_buf();
+ 
+@@ -558,14 +562,14 @@
+ 
+ static void asusdec_reset_dock(void){
+ 	ec_chip->dock_init = 0;
+-	ASUSDEC_NOTICE("send EC_Request\n");	
++	ASUSDEC_NOTICE("send EC_Request\n");
+ 	gpio_set_value(asusdec_ecreq_gpio, 0);
+ 	msleep(20);
+-	gpio_set_value(asusdec_ecreq_gpio, 1);		
++	gpio_set_value(asusdec_ecreq_gpio, 1);
+ }
+ static int asusdec_is_init_running(void){
+ 	int ret_val;
+-	
++
+ 	mutex_lock(&ec_chip->dock_init_lock);
+ 	ret_val = ec_chip->dock_init;
+ 	ec_chip->dock_init = 1;
+@@ -586,7 +590,7 @@
+ 
+ 	if(asusdec_is_init_running()){
+ 		return 0;
+-	}	
++	}
+ 
+ 	wake_lock(&ec_chip->wake_lock);
+ 	memset(ec_chip->ec_model_name, 0, 32);
+@@ -602,29 +606,29 @@
+ 	}
+ 	if(ret_val < 0){
+ 		goto fail_to_access_ec;
+-	}	
++	}
+ 
+ 	for ( i=0; i<8; i++){
+ 		asusdec_i2c_read_data(client);
+ 	}
+-	
++
+ 	if (asusdec_dockram_read_data(0x01) < 0){
+ 		goto fail_to_access_ec;
+ 	}
+ 	strcpy(ec_chip->ec_model_name, &ec_chip->i2c_dm_data[1]);
+ 	ASUSDEC_NOTICE("Model Name: %s\n", ec_chip->ec_model_name);
+-	
++
+ 	if (asusdec_dockram_read_data(0x02) < 0){
+ 		goto fail_to_access_ec;
+ 	}
+ 	strcpy(ec_chip->ec_version, &ec_chip->i2c_dm_data[1]);
+ 	ASUSDEC_NOTICE("EC-FW Version: %s\n", ec_chip->ec_version);
+-	
++
+ 	if (asusdec_dockram_read_data(0x03) < 0){
+ 		goto fail_to_access_ec;
+ 	}
+ 	ASUSDEC_INFO("EC-Config Format: %s\n", &ec_chip->i2c_dm_data[1]);
+-	
++
+ 	if (asusdec_dockram_read_data(0x04) < 0){
+ 		goto fail_to_access_ec;
+ 	}
+@@ -656,7 +660,7 @@
+ 	}
+ 
+ 	asusdec_keypad_disable(client);
+-	
++
+ #if TOUCHPAD_ELAN
+ #if TOUCHPAD_MODE
+ 	if (1){
+@@ -675,20 +679,20 @@
+ 
+ 	asusdec_keypad_enable(client);
+ 	asusdec_clear_i2c_buffer(client);
+-	
++
+ 	enable_irq(gpio_to_irq(asusdec_apwake_gpio));
+ 	ec_chip->init_success = 1;
+ 
+ 	if ((201) && ec_chip->tp_enable){
+ 		asusdec_touchpad_enable(client);
+-	}	
++	}
+ 
+ 	ec_chip->status = 1;
+ 	asusdec_dock_status_report();
+ 	wake_unlock(&ec_chip->wake_lock);
+ 	return 0;
+ 
+-fail_to_access_ec:	
++fail_to_access_ec:
+ 	if (asusdec_dockram_read_data(0x00) < 0){
+ 		ASUSDEC_NOTICE("No EC detected\n");
+ 		ec_chip->dock_in = 0;
+@@ -710,7 +714,7 @@
+ 	if (gpio == asusdec_apwake_gpio){
+ 		disable_irq_nosync(irq);
+ 		if (ec_chip->op_mode){
+-			queue_delayed_work(asusdec_wq, &ec_chip->asusdec_fw_update_work, 0);			
++			queue_delayed_work(asusdec_wq, &ec_chip->asusdec_fw_update_work, 0);
+ 		}
+ 		else if ((ec_chip->dock_type == AUDIO_DOCK)||(ec_chip->dock_type == AUDIO_STAND)){
+ 			queue_delayed_work(asusdec_wq, &ec_chip->asusdec_audio_work, 0);
+@@ -730,7 +734,7 @@
+ 	} else if (gpio == asusdec_hall_sensor_gpio){
+ 		queue_delayed_work(asusdec_wq, &ec_chip->asusdec_hall_sensor_work, 0);
+ 	}
+-	return IRQ_HANDLED;	
++	return IRQ_HANDLED;
+ }
+ 
+ static int asusdec_irq_hall_sensor(struct i2c_client *client)
+@@ -759,7 +763,7 @@
+ 
+ 	rc = request_irq(irq, asusdec_interrupt_handler,IRQF_SHARED|IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING/*|IRQF_TRIGGER_HIGH|IRQF_TRIGGER_LOW*/, label, client);
+ 	if (rc < 0) {
+-		ASUSDEC_ERR("Could not register for %s interrupt, irq = %d, rc = %d\n", label, irq, rc);	
++		ASUSDEC_ERR("Could not register for %s interrupt, irq = %d, rc = %d\n", label, irq, rc);
+ 		rc = -EIO;
+ 		goto err_gpio_request_irq_fail ;
+ 	}
+@@ -792,7 +796,7 @@
+ 	int rc = 0 ;
+ 	unsigned gpio = asusdec_dock_in_gpio;
+ 	unsigned irq = gpio_to_irq(asusdec_dock_in_gpio);
+-	const char* label = "asusdec_dock_in" ; 
++	const char* label = "asusdec_dock_in" ;
+ 
+ 	ASUSDEC_INFO("gpio = %d, irq = %d\n", gpio, irq);
+ 	ASUSDEC_INFO("GPIO = %d , state = %d\n", gpio, gpio_get_value(gpio));
+@@ -800,27 +804,27 @@
+ 	tegra_gpio_enable(gpio);
+ 	rc = gpio_request(gpio, label);
+ 	if (rc) {
+-		ASUSDEC_ERR("gpio_request failed for input %d\n", gpio);		
++		ASUSDEC_ERR("gpio_request failed for input %d\n", gpio);
+ 	}
+ 
+ 	rc = gpio_direction_input(gpio) ;
+ 	if (rc) {
+-		ASUSDEC_ERR("gpio_direction_input failed for input %d\n", gpio);			
++		ASUSDEC_ERR("gpio_direction_input failed for input %d\n", gpio);
+ 		goto err_gpio_direction_input_failed;
+ 	}
+ 	ASUSDEC_INFO("GPIO = %d , state = %d\n", gpio, gpio_get_value(gpio));
+ 
+ 	rc = request_irq(irq, asusdec_interrupt_handler,IRQF_SHARED|IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING/*|IRQF_TRIGGER_HIGH|IRQF_TRIGGER_LOW*/, label, client);
+ 	if (rc < 0) {
+-		ASUSDEC_ERR("Could not register for %s interrupt, irq = %d, rc = %d\n", label, irq, rc);	
++		ASUSDEC_ERR("Could not register for %s interrupt, irq = %d, rc = %d\n", label, irq, rc);
+ 		rc = -EIO;
+ 		goto err_gpio_request_irq_fail ;
+-	}	
++	}
+ 	ASUSDEC_INFO("request irq = %d, rc = %d\n", irq, rc);
+ 
+ 	return 0 ;
+ 
+-err_gpio_request_irq_fail :	
++err_gpio_request_irq_fail :
+ 	gpio_free(gpio);
+ err_gpio_direction_input_failed:
+ 	return rc;
+@@ -831,7 +835,7 @@
+ 	int rc = 0 ;
+ 	unsigned gpio = asusdec_apwake_gpio;
+ 	unsigned irq = gpio_to_irq(asusdec_apwake_gpio);
+-	const char* label = "asusdec_input" ; 
++	const char* label = "asusdec_input" ;
+ 
+ 	ASUSDEC_INFO("gpio = %d, irq = %d\n", gpio, irq);
+ 	ASUSDEC_INFO("GPIO = %d , state = %d\n", gpio, gpio_get_value(gpio));
+@@ -839,29 +843,29 @@
+ 	tegra_gpio_enable(gpio);
+ 	rc = gpio_request(gpio, label);
+ 	if (rc) {
+-		ASUSDEC_ERR("gpio_request failed for input %d\n", gpio);		
++		ASUSDEC_ERR("gpio_request failed for input %d\n", gpio);
+ 		goto err_request_input_gpio_failed;
+ 	}
+ 
+ 	rc = gpio_direction_input(gpio) ;
+ 	if (rc) {
+-		ASUSDEC_ERR("gpio_direction_input failed for input %d\n", gpio);			
++		ASUSDEC_ERR("gpio_direction_input failed for input %d\n", gpio);
+ 		goto err_gpio_direction_input_failed;
+ 	}
+ 	ASUSDEC_INFO("GPIO = %d , state = %d\n", gpio, gpio_get_value(gpio));
+ 
+ 	rc = request_irq(irq, asusdec_interrupt_handler,/*IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING|IRQF_TRIGGER_HIGH|*/IRQF_TRIGGER_LOW, label, client);
+ 	if (rc < 0) {
+-		ASUSDEC_ERR("Could not register for %s interrupt, irq = %d, rc = %d\n", label, irq, rc);	
++		ASUSDEC_ERR("Could not register for %s interrupt, irq = %d, rc = %d\n", label, irq, rc);
+ 		rc = -EIO;
+ 		goto err_gpio_request_irq_fail ;
+ 	}
+ 	enable_irq_wake(irq);
+-	ASUSDEC_INFO("request irq = %d, rc = %d\n", irq, rc);	
++	ASUSDEC_INFO("request irq = %d, rc = %d\n", irq, rc);
+ 
+ 	return 0 ;
+ 
+-err_gpio_request_irq_fail :	
++err_gpio_request_irq_fail :
+ 	gpio_free(gpio);
+ err_gpio_direction_input_failed:
+ err_request_input_gpio_failed :
+@@ -872,8 +876,10 @@
+ {
+ 	int rc = 0 ;
+ 	unsigned gpio = asusdec_ecreq_gpio;
++#if ASUSDEC_DEBUG
+ 	unsigned irq = gpio_to_irq(asusdec_apwake_gpio);
+-	const char* label = "asusdec_request" ; 
++#endif
++	const char* label = "asusdec_request" ;
+ 
+ 	ASUSDEC_INFO("gpio = %d, irq = %d\n", gpio, irq);
+ 	ASUSDEC_INFO("GPIO = %d , state = %d\n", gpio, gpio_get_value(gpio));
+@@ -881,17 +887,17 @@
+ 	tegra_gpio_enable(gpio);
+ 	rc = gpio_request(gpio, label);
+ 	if (rc) {
+-		ASUSDEC_ERR("gpio_request failed for input %d\n", gpio);		
++		ASUSDEC_ERR("gpio_request failed for input %d\n", gpio);
+ 		goto err_exit;
+ 	}
+ 
+ 	rc = gpio_direction_output(gpio, 1) ;
+ 	if (rc) {
+-		ASUSDEC_ERR("gpio_direction_output failed for input %d\n", gpio);			
++		ASUSDEC_ERR("gpio_direction_output failed for input %d\n", gpio);
+ 		goto err_exit;
+ 	}
+ 	ASUSDEC_INFO("GPIO = %d , state = %d\n", gpio, gpio_get_value(gpio));
+-	
++
+ 	return 0 ;
+ 
+ err_exit:
+@@ -903,7 +909,7 @@
+ {
+ 	switch (x){
+ 		case ASUSDEC_KEYPAD_ESC:
+-			return KEY_BACK; 
++			return KEY_BACK;
+ 
+ 		case ASUSDEC_KEYPAD_KEY_WAVE:
+ 			return KEY_GRAVE;
+@@ -1100,7 +1106,7 @@
+ 		case ASUSDEC_KEYPAD_RIGHTCTRL:
+ 			return KEY_RIGHTCTRL;
+ 
+-		case ASUSDEC_KEYPAD_HOME:	
++		case ASUSDEC_KEYPAD_HOME:
+ 			return KEY_HOME;
+ 
+ 		case ASUSDEC_KEYPAD_PAGEUP:
+@@ -1115,23 +1121,23 @@
+ 		//--- JP keys
+ 		case ASUSDEC_YEN:
+ 			return KEY_YEN;
+-			
++
+ 		case ASUSDEC_RO:
+ 			return KEY_RO;
+-			
++
+ 		case ASUSDEC_MUHENKAN:
+ 			return KEY_MUHENKAN;
+-			
++
+ 		case ASUSDEC_HENKAN:
+ 			return KEY_HENKAN;
+-			
++
+ 		case ASUSDEC_HIRAGANA_KATAKANA:
+-			return KEY_KATAKANAHIRAGANA;			
+-			
++			return KEY_KATAKANAHIRAGANA;
++
+ 		//--- UK keys
+ 		case ASUSDEC_EUROPE_2:
+ 			return KEY_102ND;
+-			
++
+ 		default:
+ 			return -1;
+ 	}
+@@ -1143,8 +1149,10 @@
+ 
+ static int asusdec_tp_control(int arg){
+ 
+-	int ret_val = 0;	
+-	
++	int ret_val;
++
++	ret_val = 0;
++
+ 	if(arg == ASUSDEC_TP_ON){
+ 		if (ec_chip->tp_enable == 0){
+ 			ec_chip->tp_wait_ack = 1;
+@@ -1157,16 +1165,27 @@
+ 			ec_chip->init_success = -1;
+ 			asusdec_reset_dock();
+ 		}
+-		ret_val = 0;
+ 	} else if (arg == ASUSDEC_TP_OFF){
+ 		ec_chip->tp_wait_ack = 1;
+ 		ec_chip->tp_enable = 0;
+ 		asusdec_i2c_write_data(ec_chip->client, 0xF5D4);
+ 		ec_chip->d_index = 0;
+-		ret_val = 0;
++	} else if (arg == ASUSDEC_TP_TOOGLE){
++		ec_chip->tp_wait_ack = 1;
++		ec_chip->d_index = 0;
++		if(ec_chip->tp_enable)
++		{
++			ec_chip->tp_enable = 0;
++			asusdec_i2c_write_data(ec_chip->client, 0xF5D4);
++		}
++		else
++		{
++			ec_chip->tp_enable = 1;
++			asusdec_i2c_write_data(ec_chip->client, 0xF4D4);
++		}
+ 	} else
+ 		ret_val = -ENOTTY;
+-	
++
+ 	return ret_val;
+ 
+ }
+@@ -1177,17 +1196,17 @@
+ 	ec_chip->touchpad_data.y_sign = (ec_chip->ec_data[0] & Y_SIGN_MASK) ? 1:0;
+ 	ec_chip->touchpad_data.left_btn = (ec_chip->ec_data[0] & LEFT_BTN_MASK) ? 1:0;
+ 	ec_chip->touchpad_data.right_btn = (ec_chip->ec_data[0] & RIGHT_BTN_MASK) ? 1:0;
+-	ec_chip->touchpad_data.delta_x = 
++	ec_chip->touchpad_data.delta_x =
+ 		(ec_chip->touchpad_data.x_sign) ? (ec_chip->ec_data[1] - 0xff):ec_chip->ec_data[1];
+-	ec_chip->touchpad_data.delta_y = 
++	ec_chip->touchpad_data.delta_y =
+ 		(ec_chip->touchpad_data.y_sign) ? (ec_chip->ec_data[2] - 0xff):ec_chip->ec_data[2];
+ 
+ 	input_report_rel(ec_chip->indev, REL_X, ec_chip->touchpad_data.delta_x);
+ 	input_report_rel(ec_chip->indev, REL_Y, (-1) * ec_chip->touchpad_data.delta_y);
+ 	input_report_key(ec_chip->indev, BTN_LEFT, ec_chip->touchpad_data.left_btn);
+-	input_report_key(ec_chip->indev, KEY_BACK, ec_chip->touchpad_data.right_btn);				
++	input_report_key(ec_chip->indev, KEY_BACK, ec_chip->touchpad_data.right_btn);
+ 	input_sync(ec_chip->indev);
+-	
++
+ }
+ #endif
+ 
+@@ -1196,7 +1215,7 @@
+ 	unsigned char SA1,A1,B1,SB1,C1,D1;
+ 	static unsigned char SA1_O=0,A1_O=0,B1_O=0,SB1_O=0,C1_O=0,D1_O=0;
+ 	static int Null_data_times = 0;
+-	
++
+ 	if ((ec_chip->tp_enable) && (ec_chip->touchpad_member == ELANTOUCHPAD)){
+ 		SA1= ec_chip->ec_data[0];
+ 		A1 = ec_chip->ec_data[1];
+@@ -1205,17 +1224,17 @@
+ 		C1 = ec_chip->ec_data[4];
+ 		D1 = ec_chip->ec_data[5];
+ 		ASUSDEC_INFO("SA1=0x%x A1=0x%x B1=0x%x SB1=0x%x C1=0x%x D1=0x%x \n",SA1,A1,B1,SB1,C1,D1);
+-		if ( (SA1 == 0xC4) && (A1 == 0xFF) && (B1 == 0xFF) && 
++		if ( (SA1 == 0xC4) && (A1 == 0xFF) && (B1 == 0xFF) &&
+ 		     (SB1 == 0x02) && (C1 == 0xFF) && (D1 == 0xFF)){
+ 			Null_data_times ++;
+ 			goto asusdec_tp_abs_end;
+ 		}
+ 
+-		if(!(SA1 == SA1_O && A1 == A1_O && B1 == B1_O && 
++		if(!(SA1 == SA1_O && A1 == A1_O && B1 == B1_O &&
+ 		   SB1 == SB1_O && C1 == C1_O && D1 == D1_O)) {
+ 			elantech_report_absolute_to_related(ec_chip, &Null_data_times);
+ 		}
+-		
++
+ asusdec_tp_abs_end:
+ 		SA1_O = SA1;
+ 		A1_O = A1;
+@@ -1246,17 +1265,17 @@
+ 	} else {
+ 		tp_start = 0;
+ 	}
+-		
++
+ 	for( i = tp_start; i < length - 1 ; i++){
+ 		ec_chip->ec_data[ec_chip->d_index] = ec_chip->i2c_data[i+2];
+ 		ec_chip->d_index++;
+-		if (ec_chip->d_index == 6){			
++		if (ec_chip->d_index == 6){
+ 			asusdec_tp_abs();
+ 			ec_chip->d_index = 0;
+ 		}
+ 	}
+-	
+-	
++
++
+ 	if (ec_chip->d_index)
+ 		mod_timer(&ec_chip->asusdec_timer,jiffies+(HZ * 1/20));
+ #else
+@@ -1268,7 +1287,7 @@
+ 			asusdec_tp_rel();
+ 			ec_chip->d_index = 0;
+ 		}
+-	}	
++	}
+ #endif
+ }
+ 
+@@ -1375,23 +1394,23 @@
+ }
+ static void asusdec_kp_sci(void){
+ 	int ec_signal = ec_chip->i2c_data[2];
+-	
++
+ 	ec_chip->keypad_data.input_keycode = asusdec_kp_sci_table[ec_signal];
+ 	if(ec_chip->keypad_data.input_keycode > 0){
+ 		ASUSDEC_INFO("input_keycode = 0x%x\n", ec_chip->keypad_data.input_keycode);
+-		
++
+ 		input_report_key(ec_chip->indev, ec_chip->keypad_data.input_keycode, 1);
+-		input_sync(ec_chip->indev); 
++		input_sync(ec_chip->indev);
+ 		input_report_key(ec_chip->indev, ec_chip->keypad_data.input_keycode, 0);
+-		input_sync(ec_chip->indev); 
+-		
+-	}else{				
++		input_sync(ec_chip->indev);
++
++	}else{
+ 		ASUSDEC_INFO("Unknown ec_signal = 0x%x\n", ec_signal);
+ 	}
+ }
+ static void asusdec_kp_key(void){
+ 	int scancode = 0;
+-	
++
+ 	if (ec_chip->i2c_data[2] == ASUSDEC_KEYPAD_KEY_EXTEND){
+ 		ec_chip->keypad_data.extend = 1;
+ 		ec_chip->bc = 3;
+@@ -1400,12 +1419,12 @@
+ 		ec_chip->bc = 2;
+ 	}
+ 	if(ec_chip->i2c_data[ec_chip->bc] == ASUSDEC_KEYPAD_KEY_BREAK){
+-		ec_chip->keypad_data.value = 0;	
++		ec_chip->keypad_data.value = 0;
+ 		ec_chip->bc++;
+ 	}else{
+ 		ec_chip->keypad_data.value = 1;
+ 	}
+-	
++
+ 	if (ec_chip->keypad_data.extend == 1){
+ 		scancode = ((ASUSDEC_KEYPAD_KEY_EXTEND << 8) | ec_chip->i2c_data[ec_chip->bc]);
+ 	} else {
+@@ -1428,22 +1447,22 @@
+ 	ASUSDEC_INFO("scancode = 0x%x\n", scancode);
+ 	ec_chip->keypad_data.input_keycode = asusdec_kp_key_mapping(scancode);
+ 	if(ec_chip->keypad_data.input_keycode > 0){
+-		ASUSDEC_INFO("input_keycode = 0x%x, input_value = %d\n", 
++		ASUSDEC_INFO("input_keycode = 0x%x, input_value = %d\n",
+ 				ec_chip->keypad_data.input_keycode, ec_chip->keypad_data.value);
+-		
+-		input_report_key(ec_chip->indev, 
++
++		input_report_key(ec_chip->indev,
+ 			ec_chip->keypad_data.input_keycode, ec_chip->keypad_data.value);
+-		input_sync(ec_chip->indev); 
+-		
+-	}else{				
++		input_sync(ec_chip->indev);
++
++	}else{
+ 		ASUSDEC_INFO("Unknown scancode = 0x%x\n", scancode);
+ 	}
+ 
+ }
+ 
+ static void asusdec_keypad_processing(void){
+-		
+-	ASUSDEC_I2C_DATA(ec_chip->i2c_data,ec_chip->index);	
++
++	ASUSDEC_I2C_DATA(ec_chip->i2c_data,ec_chip->index);
+ 	if (ec_chip->i2c_data[1] & ASUSDEC_KBC_MASK)
+ 		asusdec_kp_kbc();
+ 	else if (ec_chip->i2c_data[1] & ASUSDEC_SCI_MASK)
+@@ -1454,7 +1473,7 @@
+ 
+ static void asusdec_dock_status_report(void){
+ 	ASUSDEC_INFO("dock_in = %d\n", ec_chip->dock_in);
+-	switch_set_state(&ec_chip->dock_sdev, switch_value[ec_chip->dock_type]);
++	switch_set_state(&ec_chip->dock_sdev, (int)switch_value[ec_chip->dock_type]);
+ #if BATTERY_DRIVER
+ 	queue_delayed_work(asusdec_wq, &ec_chip->asusdec_pad_battery_report_work, 0);
+ #endif
+@@ -1466,6 +1485,7 @@
+ #endif
+ }
+ 
++/*
+ static int asusdec_get_version_num(void){
+ 	int i;
+ 	int v_num = 0;
+@@ -1479,12 +1499,13 @@
+ 	ASUSDEC_INFO("v_num = %d\n", v_num);
+ 	return v_num ;
+ }
++*/
+ #if BATTERY_DRIVER
+ static void asusdec_pad_battery_report_function(struct work_struct *dat)
+ {
+ 	int ret_val = 0;
+ 	int dock_in = ec_chip->dock_in;
+-	
++
+ 	ret_val = docking_callback(dock_in);
+ 	ASUSDEC_NOTICE("dock_in = %d, ret_val = %d\n", dock_in, ret_val);
+ 	if (ret_val < 0)
+@@ -1538,7 +1559,7 @@
+ static void asusdec_dock_init_work_function(struct work_struct *dat)
+ {
+ 	int gpio = asusdec_dock_in_gpio;
+-	int irq = gpio_to_irq(gpio);
++	//int irq = gpio_to_irq(gpio);
+ 	int i = 0;
+ 	int d_counter = 0;
+ 	int gpio_state = 0;
+@@ -1617,11 +1638,11 @@
+ 	int smbus_data;
+ 	int gpio = asusdec_apwake_gpio;
+ 	int irq = gpio_to_irq(gpio);
+-	
++
+ 	mutex_lock(&ec_chip->lock);
+ 	smbus_data = i2c_smbus_read_byte_data(&dockram_client, 0);
+ 	enable_irq(irq);
+-	BuffPush(smbus_data);		
++	BuffPush(smbus_data);
+ 	mutex_unlock(&ec_chip->lock);
+ }
+ 
+@@ -1653,7 +1674,7 @@
+ 			asusdec_kp_smi();
+ 			return ;
+ 		}
+-	}	
++	}
+ 
+ 	mutex_lock(&ec_chip->input_lock);
+ 	if (ec_chip->indev == NULL){
+@@ -1673,14 +1694,15 @@
+ 
+ static void asusAudiodec_work_function(struct work_struct *dat)
+ {
+-	// Audio Dock EC function Service
+-	ASUSDEC_NOTICE("cmd 0x6a i2c_smbus read 8 byte datas\n");
+-	int ret_val = 0;
++	//int ret_val = 0;
+ 	int mcu_cable_type = 0, bat_cable_type = 0;
+ 	int gpio = asusdec_apwake_gpio;
+ 	int irq = gpio_to_irq(gpio);
+ 
+-	ret_val = asusdec_i2c_read_data(ec_chip->client);
++	// Audio Dock EC function Service
++	ASUSDEC_NOTICE("cmd 0x6a i2c_smbus read 8 byte datas\n");
++
++	/*ret_val =*/ asusdec_i2c_read_data(ec_chip->client);
+ #if BATTERY_DRIVER
+ 		if (ec_chip->dock_type == AUDIO_DOCK) {
+ 			mcu_cable_type = asusAudiodec_cable_type_callback();
+@@ -1760,7 +1782,7 @@
+ 
+ static int asusdec_input_device_create(struct i2c_client *client){
+ 	int err = 0;
+-	
++
+ 	if (ec_chip->indev){
+ 		return 0;
+ 	}
+@@ -1775,7 +1797,7 @@
+ 	ec_chip->indev->phys = "/dev/input/asusdec";
+ 	ec_chip->indev->dev.parent = &client->dev;
+ 	ec_chip->indev->event = asusdec_event;
+-	
++
+ 	asusdec_keypad_set_input_params(ec_chip->indev);
+ 	err = input_register_device(ec_chip->indev);
+ 	if (err) {
+@@ -1846,10 +1868,10 @@
+ 		err = -ENOMEM;
+ 		goto exit;
+ 	}
+-		
++
+ 	i2c_set_clientdata(client, ec_chip);
+ 	ec_chip->client = client;
+-	ec_chip->client->driver = &asusdec_driver;				
++	ec_chip->client->driver = &asusdec_driver;
+ 	ec_chip->client->flags = 1;
+ 
+ 	mutex_init(&ec_chip->lock);
+@@ -1883,7 +1905,7 @@
+ 	ec_chip->lid_indev = NULL;
+ 	ec_chip->private->abs_dev = NULL;
+ 	asusdec_dockram_init(client);
+-	
++
+ 	cdev_add(asusdec_cdev,asusdec_dev,1) ;
+ 
+ 	ec_chip->dock_sdev.name = DOCK_SDEV_NAME;
+@@ -1965,6 +1987,11 @@
+ 	return sprintf(buf, "%d\n", (ec_chip->touchpad_member == ELANTOUCHPAD));
+ }
+ 
++static ssize_t asusdec_tp_enable_show(struct device *class,struct device_attribute *attr,char *buf)
++{
++	return sprintf(buf, "%d\n", ec_chip->tp_enable);
++}
++
+ static ssize_t asusdec_show_dock(struct device *class,struct device_attribute *attr,char *buf)
+ {
+ 	return sprintf(buf, "dock detect = %d\n", ec_chip->dock_in);
+@@ -1975,10 +2002,10 @@
+ 	if ((ec_chip->op_mode == 0) && (ec_chip->dock_in)){
+ 		if (buf[0] == '0')
+ 			queue_delayed_work(asusdec_wq, &ec_chip->asusdec_led_off_work, 0);
+-		else 
++		else
+ 			queue_delayed_work(asusdec_wq, &ec_chip->asusdec_led_on_work, 0);
+ 	}
+-	
++
+ 	return 0 ;
+ }
+ 
+@@ -2053,7 +2080,7 @@
+ 		ec_chip->ec_wakeup = 1;
+ 		ASUSDEC_NOTICE("Keep EC active when PAD in LP0\n");
+ 	}
+-		
++
+ 	return 0 ;
+ }
+ 
+@@ -2067,7 +2094,7 @@
+ 		asusdec_dockram_write_data(0x0A,9);
+ 		ASUSDEC_NOTICE("discharging 15 seconds\n");
+ 		return sprintf(buf, "discharging 15 seconds\n");
+-	}	
++	}
+ 
+ 	return 0;
+ }
+@@ -2093,7 +2120,7 @@
+ 
+ static ssize_t asusdec_show_dock_battery_status(struct device *class,struct device_attribute *attr,char *buf)
+ {
+-	int bat_percentage = 0;
++	//int bat_percentage = 0;
+ 	int ret_val = 0;
+ 
+ 	if ((ec_chip->op_mode == 0) && (ec_chip->dock_in)){
+@@ -2224,7 +2251,7 @@
+ 	queue_delayed_work(asusdec_wq, &ec_chip->asusdec_dock_init_work, 0);
+ 
+ 	printk("asusdec_resume-\n");
+-	return 0;	
++	return 0;
+ }
+ 
+ static int asusdec_set_wakeup_cmd(void){
+@@ -2341,7 +2368,7 @@
+ 			msleep(2500);
+ 			ASUSDEC_NOTICE("ASUSDEC_INIT - EC version: %s\n", ec_chip->ec_version);
+ 			length = strlen(ec_chip->ec_version);
+-			ec_chip->ec_version[length] = NULL;
++			ec_chip->ec_version[length] = (int)NULL;
+ 			snprintf(name_buf, sizeof(name_buf), "SWITCH_NAME=%s", ec_chip->ec_version);
+ 			envp[env_offset++] = name_buf;
+ 			envp[env_offset] = NULL;
+@@ -2395,7 +2422,7 @@
+ }
+ 
+ static int BuffDataSize(void)
+-{   
++{
+     int in = buff_in_ptr;
+     int out = buff_out_ptr;
+ 
+@@ -2411,7 +2438,7 @@
+ static void BuffPush(char data)
+ {
+ 
+-    if (BuffDataSize() >= (EC_BUFF_LEN -1)) 
++    if (BuffDataSize() >= (EC_BUFF_LEN -1))
+     {
+         ASUSDEC_ERR("Error: EC work-buf overflow \n");
+         return;
+@@ -2419,21 +2446,21 @@
+ 
+     ec_to_host_buffer[buff_in_ptr] = data;
+     buff_in_ptr++;
+-    if (buff_in_ptr >= EC_BUFF_LEN) 
++    if (buff_in_ptr >= EC_BUFF_LEN)
+     {
+         buff_in_ptr = 0;
+-    }    
++    }
+ }
+ 
+ static char BuffGet(void)
+ {
+     char c = (char)0;
+ 
+-    if (BuffDataSize() != 0) 
++    if (BuffDataSize() != 0)
+     {
+-        c = (char) ec_to_host_buffer[buff_out_ptr];        
++        c = (char) ec_to_host_buffer[buff_out_ptr];
+         buff_out_ptr++;
+-         if (buff_out_ptr >= EC_BUFF_LEN) 
++         if (buff_out_ptr >= EC_BUFF_LEN)
+          {
+              buff_out_ptr = 0;
+          }
+@@ -2459,7 +2486,7 @@
+         i++;
+ 		f_counter = 0;
+ 		total_buf++;
+-    }	
++    }
+ 
+     ret = copy_to_user(buf, tmp_buf, i);
+     if (ret == 0)
+@@ -2473,27 +2500,27 @@
+ 
+ static ssize_t ec_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
+ {
+-    int err;    
++    int err;
+     int i;
+ 
+     if (h2ec_count > 0)
+     {                   /* There is still data in the buffer that */
+         return -EBUSY;  /* was not sent to the EC */
+     }
+-    if (count > EC_BUFF_LEN) 
++    if (count > EC_BUFF_LEN)
+     {
+         return -EINVAL; /* data size is too big */
+     }
+-    
++
+     err = copy_from_user(host_to_ec_buffer, buf, count);
+     if (err)
+     {
+         ASUSDEC_ERR("ec_write copy error\n");
+         return err;
+     }
+-   
++
+     h2ec_count = count;
+-    for (i = 0; i < count ; i++) 
++    for (i = 0; i < count ; i++)
+     {
+ 		i2c_smbus_write_byte_data(&dockram_client, host_to_ec_buffer[i],0);
+     }
+@@ -2559,7 +2586,7 @@
+ }
+ 
+ static int asusdec_dock_battery_get_status(union power_supply_propval *val){
+-	int bat_percentage = 0;
++	//int bat_percentage = 0;
+ 	int ret_val = 0;
+ 
+ 	val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
+@@ -2632,7 +2659,7 @@
+ int asusAudiodec_cable_type_callback(void) {
+ 
+ 	int retval = 0, retry = 3;
+-	int error;
++	//int error;
+ 	u8 cmd[2];
+ 
+ 	cmd[0] = 0x55;
+@@ -2655,7 +2682,7 @@
+ 			}
+ 		}
+ 	}
+-fail_to_access_mcu:
++//fail_to_access_mcu:
+ 	ASUSDEC_NOTICE("MCU doesn't exist or fail to access MCU\n");
+ 	return -1;
+ }
+@@ -2663,7 +2690,7 @@
+ 
+ static int __init asusdec_init(void)
+ {
+-	int err_code = 0;	
++	int err_code = 0;
+ 
+ 	printk(KERN_INFO "%s+ #####\n", __func__);
+ 	if (asusdec_major) {
+@@ -2678,7 +2705,7 @@
+ 	asusdec_cdev = cdev_alloc() ;
+ 	asusdec_cdev->owner = THIS_MODULE ;
+ 	asusdec_cdev->ops = &asusdec_fops ;
+-		
++
+ 	err_code=i2c_add_driver(&asusdec_driver);
+ 	if(err_code){
+ 		ASUSDEC_ERR("i2c_add_driver fail\n") ;
+@@ -2702,9 +2729,9 @@
+ 	return 0;
+ 
+ device_create_fail :
+-	class_destroy(asusdec_class) ;	
++	class_destroy(asusdec_class) ;
+ class_create_fail :
+-	i2c_del_driver(&asusdec_driver);	
++	i2c_del_driver(&asusdec_driver);
+ i2c_add_driver_fail :
+ 	printk(KERN_INFO "%s- #####\n", __func__);
+ 	return err_code;
+diff -ur stock-kernel/drivers/input/asusec/asusdec.h linux/drivers/input/asusec/asusdec.h
+--- stock-kernel/drivers/input/asusec/asusdec.h	2012-09-13 08:32:35.000000000 +0200
++++ linux/drivers/input/asusec/asusdec.h	2013-02-13 16:09:15.940021541 +0100
+@@ -25,18 +25,18 @@
+ 						for (i = 0; i < array[0]+1; i++) \
+ 							ASUSDEC_INFO("ec_data[%d] = 0x%x\n", i, array[i]);	\
+ 					} while(0)
++#define ASUSDEC_NOTICE(format, arg...)  \
++        printk(KERN_NOTICE "asusdec: [%s] " format , __FUNCTION__ , ## arg)
+ #else
+-#define ASUSDEC_INFO(format, arg...)	 
++#define ASUSDEC_INFO(format, arg...)
+ #define ASUSDEC_I2C_DATA(array, i)
++#define ASUSDEC_NOTICE(format, arg...)
+ #endif
+ 
+-#define ASUSDEC_NOTICE(format, arg...)	\
+-	printk(KERN_NOTICE "asusdec: [%s] " format , __FUNCTION__ , ## arg)
+-
+ #define ASUSDEC_ERR(format, arg...)	\
+ 	printk(KERN_ERR "asusdec: [%s] " format , __FUNCTION__ , ## arg)
+ 
+-//-----------------------------------------	       
++//-----------------------------------------
+ 
+ #define DRIVER_DESC     		"ASUS Dock EC Driver"
+ #define DOCK_SDEV_NAME			"dock"
+@@ -45,7 +45,6 @@
+ #define ASUSDEC_I2C_ERR_TOLERANCE	8
+ #define ASUSDEC_RETRY_COUNT		3
+ #define ASUSDEC_POLLING_RATE		80
+-
+ #define ASUSDEC_OBF_MASK		0x1
+ #define ASUSDEC_KEY_MASK		0x4
+ #define ASUSDEC_KBC_MASK		0x8
+@@ -91,7 +90,7 @@
+ #define ASUSDEC_KEYPAD_KEY_WAVE		0x0E
+ #define ASUSDEC_KEYPAD_KEY_1		0x16
+ #define ASUSDEC_KEYPAD_KEY_2		0X1E
+-#define ASUSDEC_KEYPAD_KEY_3		0x26	
++#define ASUSDEC_KEYPAD_KEY_3		0x26
+ #define ASUSDEC_KEYPAD_KEY_4		0x25
+ #define ASUSDEC_KEYPAD_KEY_5		0x2E
+ #define ASUSDEC_KEYPAD_KEY_6        	0x36
+@@ -159,14 +158,14 @@
+ #define ASUSDEC_KEYPAD_PAGEUP		0xE07D
+ #define ASUSDEC_KEYPAD_PAGEDOWN		0xE07A
+ #define ASUSDEC_KEYPAD_END			0xE069
+-/************  JP keys *************/                       
+-#define ASUSDEC_HANKAKU_ZENKAKU		0x5F                
++/************  JP keys *************/
++#define ASUSDEC_HANKAKU_ZENKAKU		0x5F
+ #define ASUSDEC_YEN					0x6A
+-#define ASUSDEC_MUHENKAN				0x67        
+-#define ASUSDEC_HENKAN				0x64        
++#define ASUSDEC_MUHENKAN				0x67
++#define ASUSDEC_HENKAN				0x64
+ #define ASUSDEC_HIRAGANA_KATAKANA	0x13
+ #define ASUSDEC_RO					0x51
+-/********************************/    
++/********************************/
+ /************  UK keys *************/
+ #define ASUSDEC_EUROPE_2				0x61
+ /********************************/
+@@ -194,6 +193,7 @@
+ #define ASUSDEC_CPAS_LED_OFF	0
+ #define ASUSDEC_TP_ON	1
+ #define ASUSDEC_TP_OFF	0
++#define ASUSDEC_TP_TOOGLE	2
+ #define ASUSDEC_EC_ON	1
+ #define ASUSDEC_EC_OFF	0
+ #define ASUSDEC_IOC_MAGIC	0xf4
+@@ -248,7 +248,7 @@
+ struct asusdec_keypad{
+ 	int value;
+ 	int input_keycode;
+-	int extend;	
++	int extend;
+ };
+ 
+ struct asusdec_touchpad_relative{
+@@ -303,7 +303,7 @@
+ 	struct asusdec_keypad keypad_data;
+ 	struct elantech_data *private;
+ 	struct timer_list asusdec_timer;
+-#if TOUCHPAD_MODE	
++#if TOUCHPAD_MODE
+ 	struct asusdec_touchpad_absolute t_abs;
+ #else
+ 	struct asusdec_touchpad_relative touchpad_data;
+@@ -323,7 +323,7 @@
+ 	char dock_pid[32];
+ 	int polling_rate;
+ 	int dock_in;	// 0: without dock, 1: with dock
+-	int op_mode;	// 0: normal mode, 1: fw update mode	
++	int op_mode;	// 0: normal mode, 1: fw update mode
+ 	int kbc_value;	// capslock_led 0: led off, 1: led on
+ 	int dock_det;	// dock-in interrupt count
+ 	int dock_init;	// 0: dock not init, 1: dock init successfully
+diff -ur stock-kernel/drivers/input/asusec/asuspec.h linux/drivers/input/asusec/asuspec.h
+--- stock-kernel/drivers/input/asusec/asuspec.h	2012-09-13 08:32:35.000000000 +0200
++++ linux/drivers/input/asusec/asuspec.h	2013-02-02 03:17:29.620003883 +0100
+@@ -11,6 +11,8 @@
+  * Debug Utility
+  */
+ #if ASUSPEC_DEBUG
++#define ASUSPEC_NOTICE(format, arg...)	\
++	printk(KERN_NOTICE "asuspec: [%s] " format , __FUNCTION__ , ## arg)
+ #define ASUSPEC_INFO(format, arg...)	\
+ 	printk(KERN_INFO "asuspec: [%s] " format , __FUNCTION__ , ## arg)
+ #define ASUSPEC_I2C_DATA(array, i)	\
+@@ -19,17 +21,15 @@
+ 							ASUSPEC_INFO("pad_ec_data[%d] = 0x%x\n", i, array[i]);	\
+ 					} while(0)
+ #else
+-#define ASUSPEC_INFO(format, arg...)	 
++#define ASUSPEC_INFO(format, arg...)
+ #define ASUSPEC_I2C_DATA(array, i)
++#define ASUSPEC_NOTICE(format, arg...)
+ #endif
+ 
+-#define ASUSPEC_NOTICE(format, arg...)	\
+-	printk(KERN_NOTICE "asuspec: [%s] " format , __FUNCTION__ , ## arg)
+-
+ #define ASUSPEC_ERR(format, arg...)	\
+ 	printk(KERN_ERR "asuspec: [%s] " format , __FUNCTION__ , ## arg)
+ 
+-//-----------------------------------------	       
++//-----------------------------------------
+ 
+ #define DRIVER_DESC     		"ASUS PAD EC driver"
+ #define PAD_SDEV_NAME			"pad"
+diff -ur stock-kernel/drivers/input/asusec/elan_i2c_asus.c linux/drivers/input/asusec/elan_i2c_asus.c
+--- stock-kernel/drivers/input/asusec/elan_i2c_asus.c	2012-09-13 08:32:35.000000000 +0200
++++ linux/drivers/input/asusec/elan_i2c_asus.c	2013-02-02 02:38:59.330003817 +0100
+@@ -6,6 +6,7 @@
+ #include <linux/interrupt.h>
+ #include <linux/init.h>
+ #include <linux/input.h>
++#include <linux/input/mt.h>
+ #include <asm/gpio.h>
+ #include <linux/workqueue.h>
+ #include <linux/cdev.h>
+@@ -23,14 +24,16 @@
+ 
+ static int elan_i2c_asus_cmd(struct i2c_client *client,unsigned char *param, int command)
+ {
+-  
++
+ 	u16 asus_ec_cmd;
+ 	int ret;
+ 	int retry = ELAN_RETRY_COUNT;
+ 	int i;
+ 	int retry_data_count;
+ 	u8 i2c_data[16];
++#if ASUSDEC_DEBUG
+ 	int index;
++#endif
+ 
+ 	ELAN_INFO("command = 0x%x\n",command);
+ 	asus_ec_cmd = (((command & 0x00ff) << 8) | 0xD4);
+@@ -40,8 +43,8 @@
+ 		ELAN_ERR("Wirte to device fails status %x\n",ret);
+ 		return ret;
+ 	}
+-	msleep(CONVERSION_TIME_MS);	
+-	
++	msleep(CONVERSION_TIME_MS);
++
+ 	while(retry-- > 0){
+ 		ret = i2c_smbus_read_i2c_block_data(client, 0x6A, 8, i2c_data);
+ 		if (ret < 0) {
+@@ -49,139 +52,112 @@
+ 			return ret;
+ 		}
+ 		ASUSDEC_I2C_DATA(i2c_data, index);
+-		if ((i2c_data[1] & ASUSDEC_OBF_MASK) && 
+-			(i2c_data[1] & ASUSDEC_AUX_MASK)){ 
++		if ((i2c_data[1] & ASUSDEC_OBF_MASK) &&
++			(i2c_data[1] & ASUSDEC_AUX_MASK)){
+ 			if (i2c_data[2] == PSMOUSE_RET_ACK){
+ 				break;
+ 			}
+ 			else if (i2c_data[2] == PSMOUSE_RET_NAK){
+ 				goto fail_elan_touchpad_i2c;
+ 			}
+-		}		
++		}
+ 		msleep(CONVERSION_TIME_MS/5);
+ 	}
+-	
++
+ 	retry_data_count = (command & 0x0f00) >> 8;
+ 	for(i=1; i <= retry_data_count; i++){
+-		param[i-1] = i2c_data[i+2];	  
++		param[i-1] = i2c_data[i+2];
+ 	}
+-	  
++
+ 	return 0;
+-	
+-fail_elan_touchpad_i2c:	
++
++fail_elan_touchpad_i2c:
+ 	ELAN_ERR("fail to get touchpad response");
+ 	return -1;
+-  
++
+ }
+ 
+ /*
+  * Interpret complete data packets and report absolute mode input events for
+  * hardware version 2. (6 byte packets)
++ * HACKED version: don't write anything in asus structs,
++ * just report position/keys/pressure to kernel.
+  */
+ void elantech_report_absolute_to_related(struct asusdec_chip *ec_chip, int *Null_data_times)
+ {
+-	struct elantech_data *etd;
+ 	struct input_dev *dev;
+ 	unsigned char *packet;
+-	unsigned int fingers;
+-	unsigned int width = 0;
+-	int left_button, right_button;
+-	int x, y;
+-	int last_fingers;
+-	int i;
++	int fingers,x,y,h_value,width;
+ 
+-	etd = (struct elantech_data *) ec_chip->private;
+-	dev = etd->abs_dev;
+- 	packet = ec_chip->ec_data;
++	/* fingers => how many fingers are now on the touchpad
++	 * x => current X position
++	 * y => current y position
++	 * h_value => current Z position ( pressure on the touchpad )
++	 * width => width of touched area
++	 */
+ 
+-	// Report multitouch events for fingers.
++	packet = ec_chip->ec_data;
++	dev = ec_chip->private->abs_dev;
+ 	fingers = (packet[0] & 0xc0) >> 6;
+ 	x = ((packet[1] & 0x0f) << 8) | packet[2];
+-	y = etd->ymax - (((packet[4] & 0x0f) << 8) | packet[5]);
+-	//printk("fingers=%d, x=%d, y=%d, packet=%02x,%02x,%02x,%02x,%02x,%02x\n", fingers, x, y, packet[0], packet[1], packet[2], packet[3], packet[4], packet[5]);
+-        width = ((packet[0] & 0x30) >> 2) | ((packet[3] & 0x30) >> 4);
+-
+-	last_fingers = etd->fingers;
+-
+-	switch (fingers) {
+-		case 0:
+-			// No fingers down.
+-			etd->fingers = 0;
+-			break;
++	y = ETP_YMAX_V2 - (((packet[4] & 0x0f) << 8) | packet[5]);
++	width = ((packet[0] & 0x30) >> 2) | ((packet[3] & 0x30) >> 4);
++	h_value = ((packet[4] & 0xf0) >> 4) | (packet[1] & 0xf0);
++
++	input_report_key(dev, BTN_LEFT, (packet[0] & 0x01));
++	input_report_key(dev, BTN_RIGHT, (packet[0] & 0x02) >> 1);
++	input_report_key(dev, BTN_TOUCH, fingers != 0);
++	input_report_key(dev, BTN_TOOL_FINGER, fingers == 1);
++	input_report_key(dev, BTN_TOOL_DOUBLETAP, fingers == 2);
++	input_report_key(dev, BTN_TOOL_TRIPLETAP, fingers == 3);
++	input_report_key(dev, BTN_TOOL_QUADTAP, fingers == 4);
+ 
++	switch(fingers)
++	{
+ 		case 1:
+-			// One finger down.
+-			etd->fingers = 1;
+-			etd->pos[0].x = x;
+-			etd->pos[0].y = y;
++			input_mt_slot(dev, 0);
++			input_mt_report_slot_state(dev, MT_TOOL_FINGER, true);
++			input_report_abs(dev, ABS_MT_POSITION_X, x);
++			input_report_abs(dev, ABS_MT_POSITION_Y, y);
++			input_report_abs(dev, ABS_MT_TOUCH_MAJOR, width);
++			input_report_abs(dev, ABS_MT_PRESSURE, h_value);
++			input_mt_slot(dev, 1);
++			input_mt_report_slot_state(dev, MT_TOOL_FINGER, false);
+ 			break;
+-
+ 		case 2:
+-			// Two fingers down.
+-			// Wait to get data from both fingers.
+-			if (etd->fingers != 2) {
+-				etd->fingers = 2;
+-				etd->pos[0].x = -1;
+-				etd->pos[1].x = -1;
+-			}
+-			if ((packet[0] & 0x0c) == 0x04) {
+-				etd->pos[0].x = x;
+-				etd->pos[0].y = y;
+-			} else {
+-				etd->pos[1].x = x;
+-				etd->pos[1].y = y;
+-			}
+-			if (etd->pos[0].x < 0 || etd->pos[1].x < 0)
+-				return;
+-			break;
+-
+-		case 3:
+-			// Three or more fingers down.
+-			// Wait for at least one finger to go up.
+-			return;
+-	}
+-
+-	// Send finger reports.
+-	if (etd->fingers) {
+-		for (i = 0; i < etd->fingers; i++) {
++			if ((packet[0] & 0x0c) == 0x04) // custom asus stuff i think...
++				input_mt_slot(dev, 0); // this tell us if current data is related to finger 1 or 2
++			else
++				input_mt_slot(dev, 1);
++			input_mt_report_slot_state(dev, MT_TOOL_FINGER, true);
++			input_report_abs(dev, ABS_MT_POSITION_X, x);
++			input_report_abs(dev, ABS_MT_POSITION_Y, y);
+ 			input_report_abs(dev, ABS_MT_TOUCH_MAJOR, width);
+-			input_report_abs(dev, ABS_MT_POSITION_X, etd->pos[i].x);
+-			input_report_abs(dev, ABS_MT_POSITION_Y, etd->pos[i].y);
+-			input_mt_sync(dev);
+-		}
+-	} else if (last_fingers) {
+-		input_mt_sync(dev);
+-	}
+-
+-	// Send button press / release events.
+-	left_button = (packet[0] & 0x01);
+-	if (left_button != etd->left_button) {
+-		input_report_key(dev, BTN_LEFT, left_button);
+-		etd->left_button = left_button;
+-	}
+-
+-	right_button = (packet[0] & 0x02) >> 1;
+-	if (right_button != etd->right_button) {
+-		input_report_key(dev, BTN_RIGHT, right_button);
+-		etd->right_button = right_button;
++			input_report_abs(dev, ABS_MT_PRESSURE, h_value);
++			break;
++		case 0:
++			input_mt_slot(dev, 0);
++			input_mt_report_slot_state(dev, MT_TOOL_FINGER, false);
++			input_mt_slot(dev, 1);
++			input_mt_report_slot_state(dev, MT_TOOL_FINGER, false);
+ 	}
+-	
++	input_mt_report_pointer_emulation(dev, true);
+ 	input_sync(dev);
+ }
+ 
+ /*
+  * Put the touchpad into absolute mode
+  */
+- 
++
+ static int elantech_set_absolute_mode(struct asusdec_chip *ec_chip)
+ {
+-	
++
+ 	struct i2c_client *client;
+-	unsigned char reg_10 = 0x03;	
+-		
++	unsigned char reg_10 = 0x03;
++
+ 	ELAN_INFO("elantech_set_absolute_mode 2\n");
+ 	client = ec_chip->client;
+-	
++
+ 	if ((!elan_i2c_asus_cmd(client, NULL, ETP_PS2_CUSTOM_COMMAND)) &&
+ 	    (!elan_i2c_asus_cmd(client, NULL, ETP_REGISTER_RW)) &&
+ 	    (!elan_i2c_asus_cmd(client, NULL, ETP_PS2_CUSTOM_COMMAND)) &&
+@@ -189,59 +165,96 @@
+ 	    (!elan_i2c_asus_cmd(client, NULL, ETP_PS2_CUSTOM_COMMAND)) &&
+ 	    (!elan_i2c_asus_cmd(client, NULL, reg_10)) &&
+ 	    (!elan_i2c_asus_cmd(client, NULL, PSMOUSE_CMD_SETSCALE11))) {
+-		
++
+ 		return 0;
+ 	}
+-	return -1; 
++	return -1;
+ }
+ 
+-
+ /*
+  * Set the appropriate event bits for the input subsystem
+  */
+ static int elantech_set_input_rel_params(struct asusdec_chip *ec_chip)
+ {
+ 	struct elantech_data *etd = ec_chip->private;
++	struct input_dev *dev;
+ 	unsigned char param[3];
+ 	int ret;
+ 
+-        if ((!elan_i2c_asus_cmd(ec_chip->client, NULL, ETP_PS2_CUSTOM_COMMAND)) &&
+-            (!elan_i2c_asus_cmd(ec_chip->client, NULL, 0x0001)) &&
+-            (!elan_i2c_asus_cmd(ec_chip->client, param, PSMOUSE_CMD_GETINFO))){
+-                etd->fw_version = (param[0] << 16) | (param[1] << 8) | param[2];
+-        }
+-        else
+-                goto init_fail;
++	if ((!elan_i2c_asus_cmd(ec_chip->client, NULL, ETP_PS2_CUSTOM_COMMAND)) &&
++			(!elan_i2c_asus_cmd(ec_chip->client, NULL, 0x0001)) &&
++			(!elan_i2c_asus_cmd(ec_chip->client, param, PSMOUSE_CMD_GETINFO))){
++					etd->fw_version = (param[0] << 16) | (param[1] << 8) | param[2];
++	}
++	else
++					goto init_fail;
+ 
+ 	if ((!elan_i2c_asus_cmd(ec_chip->client, NULL, ETP_PS2_CUSTOM_COMMAND)) &&
+ 	    (!elan_i2c_asus_cmd(ec_chip->client, NULL, 0x0000)) &&
+ 	    (!elan_i2c_asus_cmd(ec_chip->client, param, PSMOUSE_CMD_GETINFO))){
+-		
++
+ 		if(etd->abs_dev){
+ 			return 0;
+ 		}
+-		
++
+ 		etd->xmax = (0x0F & param[0]) << 8 | param[1];
+-		etd->ymax = (0xF0 & param[0]) << 4 | param[2];		
+-		
+-		etd->abs_dev = input_allocate_device();
++		etd->ymax = (0xF0 & param[0]) << 4 | param[2];
++
++		dev = etd->abs_dev = input_allocate_device();
+ 		ELAN_INFO("1 elantech_touchscreen=%p\n",etd->abs_dev);
+ 		if (etd->abs_dev != NULL){
+ 			ELAN_INFO("2 elantech_touchscreen=%p\n",etd->abs_dev);
+ 			etd->abs_dev->name = "elantech_touchscreen";
++			/* STOCK ASUS
+ 			etd->abs_dev->evbit[0] = BIT_MASK(EV_KEY) | BIT_MASK(EV_SYN);
+ 			etd->abs_dev->keybit[BIT_WORD(BTN_MOUSE)] = BIT_MASK(BTN_LEFT) | BIT_MASK(BTN_RIGHT);
+-		
++
+ 			set_bit(EV_KEY, etd->abs_dev->evbit);
+ 			set_bit(EV_ABS, etd->abs_dev->evbit);
+ 
+ 			input_set_abs_params(etd->abs_dev, ABS_MT_POSITION_X, 0, etd->xmax, 0, 0);
+ 			input_set_abs_params(etd->abs_dev, ABS_MT_POSITION_Y, 0, etd->ymax, 0, 0);
+ 			input_set_abs_params(etd->abs_dev, ABS_MT_TOUCH_MAJOR, 0, ETP_WMAX_V2, 0, 0);
++			*/
++
++			// DEFAULT from elantech.c
++
++			dev->phys = ec_chip->client->adapter->name;
++			dev->id.bustype = BUS_I2C;
++
++			__set_bit(EV_KEY, dev->evbit);
++			__set_bit(EV_ABS, dev->evbit);
++			__clear_bit(EV_REL, dev->evbit);
++
++			__set_bit(BTN_LEFT, dev->keybit);
++			__set_bit(BTN_RIGHT, dev->keybit);
++
++			__set_bit(BTN_TOUCH, dev->keybit);
++			__set_bit(BTN_TOOL_FINGER, dev->keybit);
++			__set_bit(BTN_TOOL_DOUBLETAP, dev->keybit);
++			__set_bit(BTN_TOOL_TRIPLETAP, dev->keybit);
++			__set_bit(BTN_TOOL_QUADTAP, dev->keybit);
++
++			__set_bit(INPUT_PROP_SEMI_MT, dev->propbit);
++
++			/* Touch area X Y Value */
++			input_set_abs_params(dev, ABS_X, ETP_XMIN_V2, ETP_XMAX_V2, 0, 0);
++			input_set_abs_params(dev, ABS_Y, ETP_YMIN_V2, ETP_YMAX_V2, 0, 0);
++			/* Finger Pressure value */
++			input_set_abs_params(dev, ABS_MT_PRESSURE, ETP_PMIN_V2, ETP_PMAX_V2, 0, 0);
++
++			/* Palme Value */
++			input_set_abs_params(dev, ABS_MT_TOUCH_MAJOR, ETP_WMIN_V2, ETP_WMAX_V2, 0, 0);
++
++			/* Fingers X Y values */
++			input_mt_init_slots(dev, 2);
++			input_set_abs_params(dev, ABS_MT_POSITION_X, ETP_XMIN_V2, ETP_XMAX_V2, 0, 0);
++			input_set_abs_params(dev, ABS_MT_POSITION_Y, ETP_YMIN_V2, ETP_YMAX_V2, 0, 0);
++
+ 
+ 			ret=input_register_device(etd->abs_dev);
+ 			if (ret) {
+-			      ELAN_ERR("Unable to register %s input device\n", etd->abs_dev->name);		  
++			      ELAN_ERR("Unable to register %s input device\n", etd->abs_dev->name);
+ 			}
+ 		}
+ 		return 0;
+@@ -249,9 +262,8 @@
+ 
+  init_fail:
+ 	return -1;
+-  
+-}
+ 
++}
+ 
+ /*
+  * Use magic knock to detect Elantech touchpad
+@@ -263,7 +275,7 @@
+ 	ELAN_INFO("2.6.2X-Elan-touchpad-2010-11-27\n");
+ 
+ 	client = ec_chip->client;
+-	
++
+ 	if (elan_i2c_asus_cmd(client,  NULL, PSMOUSE_CMD_DISABLE) ||
+ 	    elan_i2c_asus_cmd(client,  NULL, PSMOUSE_CMD_SETSCALE11) ||
+ 	    elan_i2c_asus_cmd(client,  NULL, PSMOUSE_CMD_SETSCALE11) ||
+@@ -282,7 +294,7 @@
+ 			param[0], param[1],param[2]);
+ 		return -1;
+ 	}
+-	
++
+ 	return 0;
+ }
+ 
+@@ -290,9 +302,10 @@
+  * Initialize the touchpad and create sysfs entries
+  */
+ int elantech_init(struct asusdec_chip *ec_chip)
+-{  
++{
+ 	ELAN_INFO("Elan et1059 elantech_init\n");
+-	
++
++
+ 	if (elantech_set_absolute_mode(ec_chip)){
+ 		ELAN_ERR("failed to put touchpad into absolute mode.\n");
+ 		return -1;
+@@ -301,6 +314,7 @@
+ 		ELAN_ERR("failed to elantech_set_input_rel_params.\n");
+ 		return -1;
+ 	}
++
+ 	//elan_i2c_asus_cmd(ec_chip->client,  NULL, PSMOUSE_CMD_ENABLE);
+ 	return 0;
+ }
+diff -ur stock-kernel/drivers/input/asusec/elan_i2c_asus.h linux/drivers/input/asusec/elan_i2c_asus.h
+--- stock-kernel/drivers/input/asusec/elan_i2c_asus.h	2012-09-13 08:32:35.000000000 +0200
++++ linux/drivers/input/asusec/elan_i2c_asus.h	2013-02-01 13:47:42.850001138 +0100
+@@ -2,19 +2,20 @@
+ #define _ELAN_I2C_ASUS_H
+ 
+ #include "asusdec.h"
++#include <linux/input.h>
+ 
+ #define ELAN_DEBUG			0
+ #if ELAN_DEBUG
+ #define ELAN_INFO(format, arg...)	\
+ 	printk(KERN_INFO "elan_i2c_asus: [%s] " format , __FUNCTION__ , ## arg)
+ #else
+-#define ELAN_INFO(format, arg...)	 
++#define ELAN_INFO(format, arg...)
+ #endif
+ 
+ 
+ #define ELAN_ERR(format, arg...)	\
+ 	printk(KERN_ERR "elan_i2c_asus: [%s] " format , __FUNCTION__ , ## arg)
+-	
++
+ #define CONVERSION_TIME_MS		50
+ 
+ #define ELAN_RETRY_COUNT		3
+@@ -99,7 +100,7 @@
+  * Hence the X and Y ranges are doubled too.
+  * The bezel around the pad also appears to be smaller
+  */
+-#define ETP_EDGE_FUZZ_V2		0
++#define ETP_EDGE_FUZZ_V2		8
+ 
+ #define ETP_XMIN_V2			(   0 + ETP_EDGE_FUZZ_V2)
+ #define ETP_XMAX_V2			(1152 - ETP_EDGE_FUZZ_V2)
+@@ -109,11 +110,16 @@
+ #define ETP_WMIN_V2                     0
+ #define ETP_WMAX_V2                     15
+ 
++#define ETP_PMIN_V2			0
++#define ETP_PMAX_V2			255
++#define ETP_WMIN_V2			0
++#define ETP_WMAX_V2			15
++
+ /*
+  * For two finger touches the coordinate of each finger gets reported
+  * separately but with reduced resolution.
+  */
+-#define ETP_2FT_FUZZ			0
++#define ETP_2FT_FUZZ			4
+ 
+ #define ETP_2FT_XMIN			(  0 + ETP_2FT_FUZZ)
+ #define ETP_2FT_XMAX			(288 - ETP_2FT_FUZZ)
+diff -ur stock-kernel/drivers/power/pad_battery.c linux/drivers/power/pad_battery.c
+--- stock-kernel/drivers/power/pad_battery.c	2012-09-13 08:32:35.000000000 +0200
++++ linux/drivers/power/pad_battery.c	2013-02-11 18:34:24.559960084 +0100
+@@ -46,9 +46,9 @@
+ #define TEMP_KELVIN_TO_CELCIUS                             (2731)
+ #define MAXIMAL_VALID_BATTERY_TEMP                             (200)
+ #define USB_NO_Cable 0
+-#define USB_DETECT_CABLE 1 
++#define USB_DETECT_CABLE 1
+ #define USB_SHIFT 0
+-#define AC_SHIFT 1 
++#define AC_SHIFT 1
+ #define USB_Cable ((1 << (USB_SHIFT)) | (USB_DETECT_CABLE))
+ #define USB_AC_Adapter ((1 << (AC_SHIFT)) | (USB_DETECT_CABLE))
+ #define USB_CALBE_DETECT_MASK (USB_Cable  | USB_DETECT_CABLE)
+@@ -64,7 +64,7 @@
+ module_param(battery_current, uint, 0644);
+ module_param(battery_remaining_capacity, uint, 0644);
+ enum {
+-       REG_MANUFACTURER_DATA,  	
++       REG_MANUFACTURER_DATA,
+ 	REG_STATE_OF_HEALTH,
+ 	REG_TEMPERATURE,
+ 	REG_VOLTAGE,
+@@ -75,7 +75,7 @@
+ 	REG_CAPACITY,
+ 	REG_SERIAL_NUMBER,
+ 	REG_MAX
+-};    
++};
+ typedef enum {
+ 	Charger_Type_Battery = 0,
+ 	Charger_Type_AC,
+@@ -177,7 +177,7 @@
+ 			val->intval =  1;
+ 		   else if (psy->type == POWER_SUPPLY_TYPE_DOCK_AC&& battery_docking_status)
+ 			val->intval =  1;
+-		   else 
++		   else
+ 		   	val->intval = 0;
+ 		break;
+ 
+@@ -262,7 +262,7 @@
+ int pad_smbus_read_data(int reg_offset,int byte)
+ {
+      s32 ret=-EINVAL;
+-     int count=0; 
++     int count=0;
+      do{
+ 	    if(byte)
+               ret=i2c_smbus_read_byte_data(pad_device->client,pad_data[reg_offset].addr);
+@@ -276,7 +276,7 @@
+ int pad_smbus_write_data(int reg_offset,int byte, unsigned int value)
+ {
+      s32 ret=-EINVAL;
+-     int count=0; 
++     int count=0;
+ 
+      do{
+ 	    if(byte){
+@@ -315,7 +315,7 @@
+ 	power_supply_changed(&pad_supply[Charger_Type_Battery]);
+ 	/* Schedule next poll */
+        pad_device->battery_present =!(gpio_get_value(pad_device->gpio_battery_detect));
+-	printk("battery_status_poll %u %u \n",BATTERY_POLLING_RATE,pad_device->battery_present);
++	//printk("battery_status_poll %u %u \n",BATTERY_POLLING_RATE,pad_device->battery_present);
+ 	if(pad_device->battery_present)
+ 		queue_delayed_work(battery_work_queue, &battery_device->status_poll_work,BATTERY_POLLING_RATE*HZ);
+ }
+@@ -348,7 +348,7 @@
+ void setup_detect_irq(void )
+ {
+        s32 ret=0;
+-	
++
+ 	pad_device->battery_present=0;
+ 	pad_device->low_battery_present=0;
+ 	 tegra_gpio_enable(pad_device->gpio_battery_detect);
+@@ -358,7 +358,7 @@
+ 		pad_device->gpio_battery_detect = -1;
+ 		goto setup_low_bat_irq;
+ 	}
+-	
++
+ 	pad_device->irq_battery_detect = gpio_to_irq(pad_device->gpio_battery_detect);
+ 	if (pad_device->irq_battery_detect < 0) {
+ 		printk("invalid battery_detect GPIO\n");
+@@ -381,7 +381,7 @@
+ 	 pad_device->battery_present=!(gpio_get_value(pad_device->gpio_battery_detect));
+ 	printk("setup_irq: battery_present =%x   \n",pad_device->battery_present);
+ setup_low_bat_irq:
+- 	
++
+ 	return;
+ }
+ void setup_low_battery_irq(void )
+@@ -529,10 +529,10 @@
+ }
+ static int pad_get_health(enum power_supply_property psp,
+ 	union power_supply_propval *val)
+-{	
++{
+ 	if (psp == POWER_SUPPLY_PROP_PRESENT) {
+ 		val->intval = pad_device->battery_present;
+-	}		
++	}
+ 	else if (psp == POWER_SUPPLY_PROP_HEALTH) {
+ 		if( pad_device->battery_present)
+ 			val->intval = POWER_SUPPLY_HEALTH_GOOD;
+@@ -566,7 +566,7 @@
+ 	if (pad_device->smbus_status < 0) {
+ 		dev_err(&pad_device->client->dev,
+ 			"%s: i2c read for %d failed\n", __func__, reg_offset);
+-		
++
+ 		if(psp == POWER_SUPPLY_PROP_TEMP && (++pad_device->temp_err<=3) &&(pad_device->old_temperature!=0xFF)){
+ 			val->intval=pad_device->old_temperature;
+ 			printk("read battery's tempurate fail use old temperature=%u pad_device->temp_err=%u\n",val->intval,pad_device->temp_err);
+@@ -577,11 +577,11 @@
+ 	}
+ 	if (psp == POWER_SUPPLY_PROP_VOLTAGE_NOW) {
+ 		val->intval=pad_device->bat_vol;
+-		printk("pad_get_psp voltage_now =%u\n",val->intval );//4
++		//printk("pad_get_psp voltage_now =%u\n",val->intval );//4
+ 	}
+ 	if (psp == POWER_SUPPLY_PROP_STATUS) {
+ 		ret=pad_device->bat_status;
+-		static char *status_text[] = {"Unknown", "Charging", "Discharging", "Not charging", "Full"};
++		//static char *status_text[] = {"Unknown", "Charging", "Discharging", "Not charging", "Full"};
+ 		/* mask the upper byte and then find the actual status */
+ 		if (!(ret & BATTERY_CHARGING) && (ac_on||battery_docking_status) ){/*DSG*/
+ 			val->intval = POWER_SUPPLY_STATUS_CHARGING;
+@@ -592,9 +592,9 @@
+ 			val->intval = POWER_SUPPLY_STATUS_FULL;
+ 		else if (ret & BATTERY_FULL_DISCHARGED)//fd
+ 			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+-		else 
++		else
+ 			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
+-		printk("pad_get_psp  val->intval=%s ret=%x\n" ,status_text[val->intval],ret);//4
++		//printk("pad_get_psp  val->intval=%s ret=%x\n" ,status_text[val->intval],ret);//4
+ 	}else if (psp == POWER_SUPPLY_PROP_TEMP) {
+ 		ret=pad_device->bat_temp;
+ 		ret -=TEMP_KELVIN_TO_CELCIUS;
+@@ -609,7 +609,7 @@
+ 			pad_device->temp_err=0;
+ 
+ 		pad_device->old_temperature=val->intval = ret;
+-		printk("pad_get_psp  batttery temperature=%u\n",val->intval );
++		//printk("pad_get_psp  batttery temperature=%u\n",val->intval );
+ 	}
+ 	return 0;
+ }
+@@ -671,7 +671,7 @@
+ 
+ 	pad_device->old_capacity=val->intval;
+ 	pad_device->cap_err=0;
+-	printk("pad_get_capacity val->intval=%u ret=%u\n",val->intval,ret);
++	//printk("pad_get_capacity val->intval=%u ret=%u\n",val->intval,ret);
+ 	return 0;
+ }
+ static int pad_get_property(struct power_supply *psy,
+@@ -716,12 +716,12 @@
+ 				"%s: INVALID property psp=%u\n", __func__,psp);
+ 			return -EINVAL;
+ 	}
+-  
++
+ 	return 0;
+ 
+ 	error:
+-		
+-	return -EINVAL;	
++
++	return -EINVAL;
+ }
+ #include "stress_test.c"
+ void config_thermal_power(void)
+diff -ur stock-kernel/drivers/ril/ril.c linux/drivers/ril/ril.c
+--- stock-kernel/drivers/ril/ril.c	2012-09-13 08:32:35.000000000 +0200
++++ linux/drivers/ril/ril.c	2013-02-13 14:47:38.239860002 +0100
+@@ -8,7 +8,8 @@
+ #include <linux/switch.h>
+ #include <linux/uaccess.h>
+ #include <linux/workqueue.h>
+-#include <../../arch/arm/mach-tegra/include/mach/board-cardhu-misc.h>
++//#include "../../arch/arm/mach-tegra/include/mach/board-cardhu-misc.h"
++#include <mach/board-cardhu-misc.h>
+ 
+ #include "pm-irq.h"
+ #include "ril.h"
+diff -ur stock-kernel/net/wireless/chan.c linux/net/wireless/chan.c
+--- stock-kernel/net/wireless/chan.c	2012-09-13 08:32:35.000000000 +0200
++++ linux/net/wireless/chan.c	2013-01-16 14:17:01.689868924 +0100
+@@ -82,9 +82,12 @@
+ {
+ 	struct ieee80211_channel *chan;
+ 	int result;
++	struct wireless_dev *mon_dev = NULL;
+ 
+-	if (wdev && wdev->iftype == NL80211_IFTYPE_MONITOR)
++	if (wdev && wdev->iftype == NL80211_IFTYPE_MONITOR) {
++		mon_dev = wdev;
+ 		wdev = NULL;
++	}
+ 
+ 	if (wdev) {
+ 		ASSERT_WDEV_LOCK(wdev);
+@@ -131,5 +134,8 @@
+ 	if (wdev)
+ 		wdev->channel = chan;
+ 
++	if (mon_dev)
++		mon_dev->channel = chan;
++
+ 	return 0;
+ }

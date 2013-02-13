@@ -1,0 +1,3 @@
+nvlfash -r --download 6 nvflash.LNX
+OR
+fastboot -i 0x0b05 flash boot fastboot.blob
