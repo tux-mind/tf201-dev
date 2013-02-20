@@ -1,5 +1,5 @@
 /*
- * boot_chooser - v2 - choose where booting from.
+ * root_chooser - v3 - choose the root directory.
  * 1) mount DATA_DEV on /data
  * 2) read the contents of /data/.boot
  * 3) parse as "block_device:root_directory:init_script"
@@ -26,7 +26,7 @@
 #include <time.h>
 #include <sys/wait.h>
 
-#define NEWROOT "/newroot"
+#define NEWROOT "/newroot/"
 #define LOG "/newroot/boot_chooser.log"
 #define BUSYBOX "/bin/busybox"
 #define MAX_LINE 255
@@ -42,6 +42,5 @@
 //the name of the file where we read the boot option
 #define BOOT_FILE "/data/.boot"
 
-#ifdef LOG_PERSISTENT
-#	include <dirent.h>
-#endif
+//from loop_mount.c
+int loop_check(char *, const char *, int *, int *);

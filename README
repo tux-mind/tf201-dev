@@ -11,3 +11,7 @@ o boot_chooser/ tmux_mind's bootchooser program.
 
 o touchpad_control/ small program for activate/deactivate the touchpad.
 
+** NOTE **
+you need to patch BlobTools for generate valid blob files.
+use these the files: https://github.com/CyanogenMod/android_device_asus_tf201/tree/ics/blobpack
+you need to build blobkpack only ( "$ make blobpack" )

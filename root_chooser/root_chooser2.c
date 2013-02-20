@@ -1,4 +1,4 @@
-#include "boot_chooser3.h"
+#include "root_chooser2.h"
 //fatal error occourred, boot up android
 void fatal(char **argv,char **envp)
 {
@@ -23,7 +23,7 @@ void mdev(char **envp)
 	waitpid(pid,NULL,0);
 }
 
-int main(int argc, char **argv, char **envp)
+int main(int argc, char **argv, char **envp) //TODO: should declare it as void ?
 {
 	FILE *log,*input;
 	char 	*line, // where we place the readed line
@@ -31,20 +31,7 @@ int main(int argc, char **argv, char **envp)
 				*blkdev, // block device to mount on newroot
 				*pos, // current position
 				**new_argv; // init args
-	int i, // used for loops
-			fd_to_close;
-			/* if we use loop devices we have to
-			 * keep the /dev/loop* file descriptor
-			 * until mount(2) call is done.
-			 * BUT we also have to close it after mount is done.
-			 * int the mount(8) source code i found that
-			 * they don't close that file descriptor at all.
-			 * their reason is that mount(8) is a short-lived process,
-			 * so exit() call will close that fd automatically.
-			 * here we are the init process, the longest-lived process! :)
-			 * so, fd_to_close is the /dev/loop file descriptor to close
-			 * after the related mount(2) call.
-			 */
+	int i; // used for loops
 
 
 #ifdef ADB
@@ -52,10 +39,6 @@ int main(int argc, char **argv, char **envp)
 	if(!fork())
 		fatal(argv,envp);
 #endif
-
-	fd_to_close = 0;
-	line = blkdev = root = NULL;
-	new_argv = NULL;
 
 	if((log = fopen(LOG,"w")) != NULL)
 	{
@@ -72,7 +55,7 @@ int main(int argc, char **argv, char **envp)
 					{
 						if(fgets(line,MAX_LINE,input))
 						{
-							strcpy(root,NEWROOT);
+							strcpy(root,"/newroot/");
 							for(i=0,pos=line;*pos!=':'&&*pos!='\0'&&*pos!='\n';pos++)
 								blkdev[i++] = *pos;
 							blkdev[i] ='\0';
@@ -87,10 +70,10 @@ int main(int argc, char **argv, char **envp)
 								pos++;
 							for(i=0;*pos!='\0'&&*pos!='\n';pos++)
 								new_argv[0][i++] = *pos;
-							new_argv[0][i] = '\0';
 							new_argv[1] = NULL;
 							free(line);
 							fclose(input);
+							umount("/data");
 							//check if blkdev exist, otherwise wait until TIMEOUT
 							if(access(blkdev,R_OK) && !mount("sysfs","/sys","sysfs",MS_RELATIME,""))
 							{
@@ -103,64 +86,39 @@ int main(int argc, char **argv, char **envp)
 								}
 								umount("/sys");
 							}
-							// use i for store mount flags
-							i=0;
-							if(!loop_check(blkdev,"/dev/loop0",&i,&fd_to_close))
+							if(!mount(blkdev,NEWROOT,"ext4",0,""))
 							{
-								if(!mount(blkdev,NEWROOT,"ext4",i,""))
+								free(blkdev);
+								if(!chdir(root) && !chroot(root))
 								{
-									// this will silently fail if blkdev is inside /data ( e.g. FS on img file )
-									umount("/data");
-									if(fd_to_close) // close /dev/loop0 fd
-										close(fd_to_close);
-									//use blkdev for checking init existence
-									snprintf(blkdev,MAX_LINE,"%s%s",root,new_argv[0]);
-									if(!access(blkdev,R_OK|X_OK))
+									free(root);
+									if(!access(new_argv[0],X_OK))
 									{
-										free(blkdev);
-										if(!chdir(root) && !chroot(root))
-										{
-											free(root);
-											fclose(log);
-											execve(new_argv[0],new_argv,envp);
-										}
-										else
-										{
-											fprintf(log,"unable to chdir/chroot to \"%s\" - %s\n",root,strerror(errno));
-											free(root);
-											free(new_argv[0]);
-											free(new_argv);
-											fclose(log);
-											umount(NEWROOT);
-										}
+										fclose(log);
+										execve(new_argv[0],new_argv,envp);
 									}
 									else
 									{
-										fprintf(log,"cannot execute \"%s\" - %s\n",blkdev,strerror(errno));
+										fprintf(log,"cannot execute \"%s\" - %s\n",new_argv[0],strerror(errno));
 										free(new_argv[0]);
 										free(new_argv);
-										free(blkdev);
 										fclose(log);
 										umount(NEWROOT);
 									}
 								}
 								else
 								{
-									fprintf(log,"unable to mount \"%s\" on %s - %s\n",blkdev,NEWROOT,strerror(errno));
-									umount("/data");
-									if(fd_to_close)
-										close(fd_to_close);
-									free(blkdev);
+									fprintf(log,"unable to chdir/chroot to \"%s\" - %s\n",root,strerror(errno));
 									free(root);
 									free(new_argv[0]);
 									free(new_argv);
 									fclose(log);
+									umount(NEWROOT);
 								}
 							}
 							else
 							{
-								fprintf(log,"loop_check failed on \"%s\" - %s\n",blkdev,strerror(errno));
-								umount("/data");
+								fprintf(log,"unable to mount \"%s\" on %s - %s\n",blkdev,NEWROOT,strerror(errno));
 								free(blkdev);
 								free(root);
 								free(new_argv[0]);
@@ -181,37 +139,10 @@ int main(int argc, char **argv, char **envp)
 							fclose(log);
 						}
 					}
-					else // this should never happen but i love error checking ;)
+					else
 					{
+						//TODO: check for single malloc calls and free the 'done well' calls results.
 						fprintf(log,"malloc - %s\n",strerror(errno));
-						if(!line)
-							fprintf(log,"failed to alloc \"line\"\n");
-						else if(!blkdev)
-						{
-							free(line);
-							fprintf(log,"failed to alloc \"blkdev\"\n");
-						}
-						else if(!root)
-						{
-							free(line);
-							free(blkdev);
-							fprintf(log,"failed to alloc \"root\"\n");
-						}
-						else if(!new_argv)
-						{
-							free(line);
-							free(blkdev);
-							free(root);
-							fprintf(log,"failed to alloc \"new_argv\"\n");
-						}
-						else
-						{
-							free(line);
-							free(blkdev);
-							free(root);
-							free(new_argv);
-							fprintf(log,"failed to alloc \"new_argv[0]\"\n");
-						}
 						fclose(input);
 						umount("/data");
 						fclose(log);
@@ -236,7 +167,6 @@ int main(int argc, char **argv, char **envp)
 			fclose(log);
 		}
 	}
-
 	fatal(argv,envp);
-	exit(EXIT_FAILURE);
+	return EXIT_FAILURE; // just for make gcc don't fire up warnings
 }
