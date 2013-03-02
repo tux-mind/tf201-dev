@@ -22,7 +22,7 @@
 # 0xc2 ( PREVIOUSSONG  ) =>  68 ( F10 )
 # 0xc3 ( PLAY/PAUSE    ) =>  87 ( F11 )
 # 0xc4 ( NEXTSONG      ) =>  88 ( F12 )
-# 0xb1 ( SLEEP         ) => 223 ( CANCEL )
+# 0xb1 ( SLEEP         ) => 111 ( DELETE )
 # 0xa7 ( SEARCH        ) =>  56 ( LEFTALT )
 # 0x9f ( HOME          ) => 125 ( LEFTMETA )
 # 0xaf ( MENU          ) => 126 ( RIGHTMETA )
