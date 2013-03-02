@@ -1,0 +1,46 @@
+#!/bin/bash
+##
+# Script for remap TF201 keyboard
+# 
+# WARNING: a v3 kernel is required!
+#
+# if you want to leave some default buttons such as brightness control or
+# media control just remove the "scancode new_keycode \" touple given to the
+# setkeycodes command
+##
+# scancode ( asus keycode description ) => new_keycode ( keycode description )
+# 0x76 ( BACK          ) =>   1 ( ESC )
+# 0xb2 ( WLAN          ) =>  59 ( F1 )
+# 0xb3 ( BLUETHOOT     ) =>  60 ( F2 )
+# 0xb4 ( TOUCHPAD/F2   ) =>  61 ( F3 )
+# 0xb5 ( BRIGHTDOWN    ) =>  62 ( F4 )
+# 0xb6 ( BRIGHTUP      ) =>  63 ( F5 )
+# 0xb7 ( AUTOBRIGHT/F3 ) =>  64 ( F6 )
+# 0xb8 ( CAMERA        ) =>  65 ( F7 )
+# 0xc0 ( WWW           ) =>  66 ( F8 )
+# 0xc1 ( SETTINGS/F4   ) =>  67 ( F9 )
+# 0xc2 ( PREVIOUSSONG  ) =>  68 ( F10 )
+# 0xc3 ( PLAY/PAUSE    ) =>  87 ( F11 )
+# 0xc4 ( NEXTSONG      ) =>  88 ( F12 )
+# 0xb1 ( SLEEP         ) => 223 ( CANCEL )
+# 0xa7 ( SEARCH        ) =>  56 ( LEFTALT )
+# 0xec ( HOME          ) => 125 ( LEFTMETA )
+#
+# here we do the trick
+setkeycodes \
+	0x76 1 \
+	0xb2 59 \
+	0xb3 60 \
+	0xb4 61 \
+	0xb5 62 \
+	0xb6 63 \
+	0xb7 64 \
+	0xb8 65 \
+	0xc0 66 \
+	0xc1 67 \
+	0xc2 68 \
+	0xc3 87 \
+	0xc4 88 \
+	0xb1 223 \
+	0xa7 56 \
+	0xec 125

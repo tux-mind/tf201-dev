@@ -1,0 +1,7 @@
+ChangeLog:
+
+o root_chooser: changed input string parsing. see root_chooser README for more info.
+o root_chooser: change names of the handled files ( .boot => .root, /boot_chooser.log => /root_chooser.log )
+o root_chooser: added support for temporary configuration file ( .root.tmp )
+o kernel: CONFIG_FRAMEBUFFER_CONSOLE=y
+o kernel: keyboard layout is now handled in a standard way. ( this allow you to use setkeycodes )
