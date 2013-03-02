@@ -122,7 +122,7 @@ int set_loop(const char *device, char *file,int *fd_to_close)
 }
 
 /** this function check if the regular file loopfile can be mounted thought loop devices.
- * @loopfile:			the source file to mount. we son't support offset, so it MUST be an ext4 partition.
+ * @loopfile:			the source file to mount. we don't support offset, so it MUST be an ext4 partition.
  * @loopdev:			the loop device where we want to setup the loopfile.
  * @flags:				pointer to the mount flags. we need to modify these for mount loop devices.
  * @fd_to_close:	used for keep trace of the leaked fd of set_loop().
