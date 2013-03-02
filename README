@@ -1,13 +1,13 @@
 Please visit http://wiki.gentoo.org/wiki/Asus_Transformer_Prime for more
 information.
 
-o kernel/ contains patches to the Asus stock 3.1.10 kernel (see the README in
-that directory)
+o v[0-9]/ contains stable versions of boot images and kernels.
 
-o test/ contains a blob file and a LNX file, generated from the Asus stock
-3.1.10 kernel with our patches. this files are ready-to-flash.
+o test/ contains in development stuff.
 
-o boot_chooser/ tmux_mind's bootchooser program.
+o scripts/ scripts for generate images and tweak keyboard layout.
+
+o root_chooser/ tmux_mind's root_chooser program.
 
 o touchpad_control/ small program for activate/deactivate the touchpad.
 

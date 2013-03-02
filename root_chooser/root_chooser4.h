@@ -64,7 +64,7 @@
 
 #define MDEV_ARGS { "/bin/mdev","-s",NULL }
 
-//where we looking for .boot file
+//where we looking for .root file
 #define DATA_DEV "/dev/mmcblk0p8"
 //the name of the file where we read the boot options
 #define ROOT_FILE "/data/.root"
