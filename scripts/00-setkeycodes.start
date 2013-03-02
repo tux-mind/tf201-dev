@@ -25,6 +25,7 @@
 # 0xb1 ( SLEEP         ) => 223 ( CANCEL )
 # 0xa7 ( SEARCH        ) =>  56 ( LEFTALT )
 # 0xec ( HOME          ) => 125 ( LEFTMETA )
+# 0xaf ( MENU          ) => 126 ( RIGHTMETA )
 #
 # here we do the trick
 setkeycodes \
@@ -43,4 +44,5 @@ setkeycodes \
 	0xc4 88 \
 	0xb1 223 \
 	0xa7 56 \
-	0xec 125
+	0xec 125 \
+#	0xaf 126
