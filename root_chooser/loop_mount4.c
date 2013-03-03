@@ -93,14 +93,17 @@ int try_loop_mount(char **loopfile, const char *mountpoint)
 	 * after the related mount(2) call.
 	 */
 
-	if (stat(*loopfile, &st) == 0 && S_ISREG(st.st_mode))
+	if(stat(*loopfile, &st))
+		return 1;
+
+	if (S_ISREG(st.st_mode))
   {
 		fd_to_close=0;
 		for(retries = 0; (res = set_loop(LOOP_DEVICE,*loopfile,&fd_to_close)) == 2 && retries < 3; retries++)
 			sleep(1);
 		if(res)
 			return 1;
-		//umount(mountpoint);
+		umount(mountpoint);
 		if(mount(LOOP_DEVICE,mountpoint,"ext4",MS_LOOP,""))
 			return 1;
 		close(fd_to_close);
@@ -112,6 +115,6 @@ int try_loop_mount(char **loopfile, const char *mountpoint)
 		strncpy(*loopfile,mountpoint,res);
 		*(*loopfile+res)='\0';
   }
+
   return 0;
 }
-
