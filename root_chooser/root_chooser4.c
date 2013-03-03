@@ -222,7 +222,7 @@ int main(int argc, char **argv, char **envp)
 								if(!mount(blkdev,NEWROOT,"ext4",0,""))
 								{
 									free(blkdev);
-									//if root is a ext image mount it on NEWROOT
+									//if root is an ext image mount it on NEWROOT
 									if(!try_loop_mount(&root,NEWROOT))
 									{
 										//check for init existence

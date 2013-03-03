@@ -19,3 +19,6 @@ v1: root_chooser.c
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+clean:
+	rm *.o
