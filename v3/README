@@ -5,3 +5,5 @@ o root_chooser: change names of the handled files ( .boot => .root, /boot_choose
 o root_chooser: added support for temporary configuration file ( .root.tmp )
 o kernel: CONFIG_FRAMEBUFFER_CONSOLE=y
 o kernel: keyboard layout is now handled in a standard way. ( this allow you to use setkeycodes, look @scripts/00-setkeycodes.start )
+o root_patch: added 00-setkeycodes.start to /etc/local.d/ for changind keyboard layout at startup
+o root_patch: added inittab for don't spawn up more than one tty ( or system will freeze )
