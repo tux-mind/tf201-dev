@@ -1,1 +1,15 @@
-no kernel directory here, kernel it's the same as the v3 images.
+NOTE:
+the kernel it's the same of the v3 stable images.
+all entry in changelog are related to root_chooser since it's the only difference from v3.
+
+ChangeLog:
+using console for printing messages.
+using /data/.root.d/ as configuration directory
+using /data/.root as default configuration
+removed support for temporary boot file
+remove support for /root_chooser.log logfile
+added user input handing
+added menu printing
+added timeout on choosing entry
+now we pause on errors.
+BUGFIX: call fflush before forking. ( or you see two <ENTER> query )
