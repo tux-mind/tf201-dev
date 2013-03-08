@@ -1,11 +1,10 @@
 root_chooser it's a program that being executed as init,
-read configuration from a file and choose what device we have to use as root.
+read configuration from more files and let the user choose what is the one to use.
 
-the input file it's read from the device /dev/mmcblk0p8 ( DATA_DEV defined in the header file ).
-that file must be named ".root" or ".root.tmp". ( ROOT_FILE defined in the header file )
-in the second case the file will be removed after root_chooser read it's content.
+the input files it's read from the device /dev/mmcblk0p8 ( DATA_DEV defined in the header file ).
+all files under the .root.d directory will be handled in the same way. ( DATA_DIR defined in the header file )
 
-after root_chooser successfully read the first line of the boot file, he parse it as follow:
+after root_chooser successfully read the first line of a file, he parse it as follow:
 "blkdev:root_directory_or_image:init_path init_args"
 where 	blkdev is the block device to mount.
 	root_directory_or_image is the directory on blkdev where your linux system lives
@@ -18,16 +17,10 @@ if root_directory_or_image it's an ext4 dd image will mount it on /newrot.
 change current directory and root to /newroot.
 substitute himself with init_path plus init_args if given.
 
-if an error occours root_chooser will log the error in /newroot/root_chooser.log ( LOG defined in the header file )
-and will change current directory and root to /newroot,
-and substitute himself with init, which is the android default init program.
-
-this will boot up android if an error occours.
-you should see a related error in the /root_chooser.log.
-
-if in the configuration file the first character of the first line is '#'
-root_chooser will remove the log file and boot up android.
-
+if an error occours root_chooser will print this error to the console
+and will wait until user press ENTER.
+if the error is fatal root_choooser will boot up android after user hit ENTER,
+otherwise root_chooser will going on.
 
 *** LIMITS ***
 init_args are limited to INIT_MAX_ARGS defined in the header file. ( now it's 15 )
