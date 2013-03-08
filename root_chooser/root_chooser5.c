@@ -211,7 +211,7 @@ int get_user_choice()
 	pid_t pid,wpid;
 
 	INFO("enter a number and press <ENTER>: ");
-
+	fflush(stdout);
 	timeout = TIMEOUT*2;
 
 	if((pid = fork()))
