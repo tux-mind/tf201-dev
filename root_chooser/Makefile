@@ -3,7 +3,10 @@ LD=arm-unknown-linux-gnueabi-ld
 CFLAGS=-Wall -g -static
 TARGET_BIN=root_chooser
 
-all: v4
+all: v5
+
+v5: root_chooser5.c loop_mount4.o menu.o
+	$(CC) $(CFLAGS) -o $(TARGET_BIN) $?
 
 v4: root_chooser4.c loop_mount4.o
 	$(CC) $(CFLAGS) -o $(TARGET_BIN) $?
