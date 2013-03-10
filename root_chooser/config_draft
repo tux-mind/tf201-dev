@@ -12,9 +12,9 @@ CMDLINE
 # init_path = the path to the init executable over the mounted root/initrd
 # init_args  = args for your init
 # CMDLINE = custom commandline to pass to your kernel 
-if ( strlen(cmdline) == 0 )
+if ( cmdline == NULL || strlen(cmdline) == 0 )
 	use_the_hardcoded_one();
-else if ( cmdline[0] == ' ' )
+else if ( cmdline[0] == '+' )
 	extend_the_hardcoded_one();
 else
 	use_cmdline_from_config();
