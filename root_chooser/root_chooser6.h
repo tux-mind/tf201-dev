@@ -46,13 +46,15 @@
 #include <fcntl.h>
 #include <time.h>
 #include <sys/wait.h>
+#include <dirent.h>
+
+#include "common.h"
 
 #define NEWROOT "/newroot/"
 #define NEWROOT_STRLEN 9
 #define LOG "/newroot/root_chooser.log"
 #define BUSYBOX "/bin/busybox"
-#define MAX_LINE 255
-#define TIMEOUT 5 /* time to wait for external block devices ( USB stick ) */
+#define TIMEOUT 5 /* time to wait for external block devices ( USB stick ) or console */
 #define INIT_MAX_ARGS 15 /* maximum number of arguments for the real init */
 
 #if NEWROOT_STRLEN > MAX_LINE
@@ -66,10 +68,19 @@
 
 //where we looking for .root file
 #define DATA_DEV "/dev/mmcblk0p8"
-//the name of the file where we read the boot options
+//the directory contains all configs
+#define DATA_DIR "/data/.root.d/"
+#define DATA_DIR_STRLEN 14
+//the name of the file where we read the default boot options
 #define ROOT_FILE "/data/.root"
-//the name of the temporary file where we read the boot options
-#define ROOT_TMP_FILE "/data/.root.tmp"
+//the console to use
+#define CONSOLE "/dev/tty1"
 
-//from loop_mount2.c
+#define HEADER 	"root_chooser - version 5\n"\
+								"say THANKS to the 4 penguins!\n"\
+								"Open Source rocks! - tux_mind <massimo.dragano@gmail.com>\n\n"
+
+//from loop_mount4.c
 int try_loop_mount(char **, const char *);
+//from menu.c
+extern int printed_lines;
