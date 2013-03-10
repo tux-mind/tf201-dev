@@ -283,7 +283,7 @@ struct sha256_region {
 #define LINUX_REBOOT_CMD_KEXEC_OLD2	0x18263645
 #define LINUX_REBOOT_CMD_KEXEC		0x45584543
 
-#define KEXEC_FLAGS (40 << 16)
+#define KEXEC_FLAGS ((40 << 16) | 4)
 
 #define COMMAND_LINE_SIZE    1024
 
