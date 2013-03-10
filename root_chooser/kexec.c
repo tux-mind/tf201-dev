@@ -1607,6 +1607,8 @@ static int k_load(char *kernel,char *initrd,char *cmdline)
 		ERROR("cannot update purgatory\n");
 		return -1;
 	}
+	DEBUG("going to load a kernel with %d segments\n",info.nr_segments);
+	press_enter();
 	result = kexec_load(info.entry, info.nr_segments, info.segment, info.kexec_flags);
 	if (result != 0) { // not used
 		/* The load failed, print some debugging information */
