@@ -1,5 +1,5 @@
 /*
- * root_chooser - v4 - choose the root directory.
+ * root_chooser - v6 - choose the root directory.
  * Copyright (C) massimo dragano <massimo.dragano@gmail.com>
  *
  * root_chooser is free software; you can redistribute it and/or
