@@ -93,7 +93,7 @@
 #define DEBUG(x,args...)
 #endif
 
-//from loop_mount4.c
+//from loop_mount2.c
 int try_loop_mount(char **, const char *);
 //from menu.c
 extern int printed_lines;
