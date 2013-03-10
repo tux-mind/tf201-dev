@@ -1548,7 +1548,7 @@ static int k_load(char *kernel,char *initrd,char *cmdline)
 	info.segment = NULL;
 	info.nr_segments = 0;
 	info.backup_start = 0;
-	info.kexec_flags = KEXEC_FLAGS;
+	info.kexec_flags = KEXEC_FLAGS | KEXEC_HARDBOOT;
 
 	result = 0;
 	/* slurp in the input kernel */
