@@ -1,13 +1,20 @@
 # a draft of the new configuration syntax
-# as usual only the first line it's readed
-# the second line contain an optional descriptio
+# the first line contain the main configuration params
+# the second line contain an optional command line for the kernel
+# the third line ca contain an optional descritpion
 # if not the name of the configuration file it's used as description
-"blkdev:kernel:root_directory_or_img_or_initrd:init_path init_args:cmdline"
+"blkdev:kernel:root_directory_or_img_or_initrd:init_path init_args"
+CMDLINE
 DESCRIPTION
-
 # blkdev = the device where all others lives
 # kernel = path to the kernel image ( uImage / zImage / Image )
 # root_directory_or_img_or_initrd = path to the real rool or a dd image of a ext4 FS or a custom initrd
 # init_path = the path to the init executable over the mounted root/initrd
 # init_args  = args for your init
-# cmdline = custom commandline to pass to your kernel ( we maybe should disable this... )
+# CMDLINE = custom commandline to pass to your kernel 
+if ( strlen(cmdline) == 0 )
+	use_the_hardcoded_one();
+else if ( cmdline[0] == ' ' )
+	extend_the_hardcoded_one();
+else
+	use_cmdline_from_config();
