@@ -5,6 +5,7 @@ typedef struct _menu_entry
 {
 	unsigned int id;
 	char 	*name,
+				*kernel,
 				*blkdev,
 				*root,
 				**init_argv;

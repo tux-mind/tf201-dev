@@ -31,21 +31,21 @@ void fgets_fix(char *string)
 	*pos='\0';
 }
 
-/* parse line as "blkdev:root_directory:init_path init_args"
+/* parse line as "blkdev:kernel:root_directory:init_path init_args"
  * returned values are:
  *	0 if ok
  *	1 if a malloc error occourred or
  *		if a parse error occourred.
  * 	if an error occour errno it's set to the corresponding error number.
  */
-int parser(char *line,char **blkdev, char **root, char ***init_args)
+int parser(char *line,char **blkdev, char**kernel, char **root, char ***init_args)
 {
 	register char *pos;
 	char *args_pool[INIT_MAX_ARGS+1];
 	register int i;
 	int j;
 
-	// init args_pool ( will free anything != 0 if an error occour )
+	// init args_pool ( will free anything != 0 if an error occours )
 	memset(args_pool,'\0',(INIT_MAX_ARGS+1)*sizeof(char*));
 
 	// count args length
@@ -72,9 +72,29 @@ int parser(char *line,char **blkdev, char **root, char ***init_args)
 		pos++;
 	for(i=0;*pos!=':'&&*pos!='\0';pos++)
 		i++;
+	if(!i)
+	{
+		free(*blkdev);
+		errno = EINVAL;
+		return 1;
+	}
+	*kernel = malloc((i+1)*sizeof(char));
+	if(!*kernel)
+	{
+		free(*blkdev);
+		return 1;
+	}
+	strncpy(*kernel,pos-i,i);
+	*(*kernel +i) = '\0';
+	// skip trailing '/'
+	if(*pos=='/')
+		pos++;
+	for(i=0;*pos!=':'&&*pos!='\0';pos++)
+		i++;
 	if(!i && *(pos-1) != '/')
 	{
 		free(*blkdev);
+		free(*kernel);
 		errno = EINVAL;
 		return 1;
 	}
@@ -82,6 +102,7 @@ int parser(char *line,char **blkdev, char **root, char ***init_args)
 	if(!*root)
 	{
 		free(*blkdev);
+		free(*kernel);
 		return 1;
 	}
 	// copy NEWROOT to root
@@ -111,6 +132,7 @@ int parser(char *line,char **blkdev, char **root, char ***init_args)
 			{
 				//free() don't change errno if called with a valid pointer.
 				free(*blkdev);
+				free(*kernel);
 				free(*root);
 				// free any allocated arg
 				for(j=0;j<INIT_MAX_ARGS+1;j++)
@@ -123,6 +145,7 @@ int parser(char *line,char **blkdev, char **root, char ***init_args)
 	if(!j)
 	{
 		free(*blkdev);
+		free(*kernel);
 		free(*root);
 		// free any allocated arg
 		for(j=0;j<INIT_MAX_ARGS+1;j++)
@@ -137,6 +160,7 @@ int parser(char *line,char **blkdev, char **root, char ***init_args)
 	{
 		// yeah, i'm really paranoid about error checking ;)
 		free(*blkdev);
+		free(*kernel);
 		free(*root);
 		for(j=0;j<INIT_MAX_ARGS+1;j++)
 			if(args_pool[j])
@@ -148,6 +172,79 @@ int parser(char *line,char **blkdev, char **root, char ***init_args)
 		*(*init_args+i) = args_pool[i];
 	*(*init_args+i) = NULL;
 	return 0; // all ok
+}
+
+int read_our_cmdline(char *dest)
+{
+	int fd;
+
+	memset(dest,'\0',COMMAND_LINE_SIZE);
+
+	if((fd = open("/proc/cmdline",O_RDONLY)) < 0)
+	{
+		FATAL("cannot open \"/proc/cmdline\" - %s\n",strerror(errno));
+		return -1;
+	}
+	if(read(fd, dest, COMMAND_LINE_SIZE*(sizeof(char))) < 0)
+	{
+		FATAL("cannot read \"/proc/cmdline\" -%s\n",strerror(errno));
+		close(fd);
+		return -1;
+	}
+	close(fd);
+	return 0;
+}
+
+/* if cmdline is NULL or his lenght is 0 => use our cmdline
+ * else if cmdline start with the '+' sign => extend our cmdline with the provided one
+ * else cmdline = the provided cmdline
+ */
+int cmdline_parser(char *line, char **cmdline)
+{
+	int fd,len;
+	char our_cmdline[COMMAND_LINE_SIZE];
+
+	// use the provided one
+	if(line != NULL && (len = strlen(line)) > 0 && line[0] != '+')
+	{
+		if(len > COMMAND_LINE_SIZE)
+		{
+			ERROR("command line too long\n");
+			return -1;
+		}
+		*cmdline = malloc((len+1)*sizeof(char));
+		if(!cmdline)
+		{
+			FATAL("malloc - %s\n",strerror(errno));
+			return -1;
+		}
+		strncpy(*cmdline,line,len);
+		return 0;
+	}
+	// read our cmdline
+	else if(read_our_cmdline(our_cmdline))
+		return -1;
+	// use our_cmdline
+	else if(line == NULL || len == 0)
+	{
+		len = strlen(our_cmdline);
+		*cmdline = malloc((len+1)*sizeof(char));
+		if(!cmdline)
+		{
+			FATAL("malloc - %s\n",strerror(errno));
+			return -1;
+		}
+		strncpy(*cmdline,our_cmdline,len);
+		return 0;
+	}
+	// extend our cmdline
+	else
+	{
+		len += strlen(our_cmdline);
+		*cmdline = malloc((len+1)*sizeof(char));
+		snpritnf(*cmdline,len,"%s %s",our_cmdline,line+1);
+		return 0;
+	}
 }
 
 int open_console(char **envp)
@@ -262,7 +359,7 @@ int parse_data_directory(menu_entry **list)
 	DIR *dir;
 	struct dirent *d;
 	FILE *file;
-	char line[MAX_LINE],*blkdev,*root,**init_args,*path;
+	char line[MAX_LINE],*blkdev,*kernel,*root,**init_args,*path;
 	int len;
 
 	if((dir = opendir(DATA_DIR)) == NULL)
@@ -298,7 +395,7 @@ int parse_data_directory(menu_entry **list)
 				return -1;
 			}
 			fgets_fix(line);
-			if(parser(line,&blkdev,&root,&init_args))
+			if(parser(line,&blkdev,&kernel,&root,&init_args))
 			{
 				fclose(file);
 				WARN("parsing %s%s - %s\n",DATA_DIR,d->d_name,strerror(errno));
@@ -306,12 +403,12 @@ int parse_data_directory(menu_entry **list)
 				continue;
 			}
 			if(fgets(line,MAX_LINE,file) == NULL || strlen(line) == 0) // no name provided
-				*list = add_entry(*list,d->d_name,blkdev,root,init_args);
+				*list = add_entry(*list,d->d_name,blkdev,kernel,root,init_args);
 			else
 			{
 				fgets_fix(line);
 				DEBUG("description: %s\n",line);
-				*list = add_entry(*list,line,blkdev,root,init_args);
+				*list = add_entry(*list,line,blkdev,kernel,root,init_args);
 			}
 			fclose(file);
 		}
@@ -347,7 +444,7 @@ int main(int argc, char **argv, char **envp)
 						if(fgets(buff,MAX_LINE,fin))
 						{
 							fgets_fix(buff);
-							if(!parser(buff,&(def_entry->blkdev),&(def_entry->root),&(def_entry->init_argv)))
+							if(!parser(buff,&(def_entry->blkdev),&(def_entry->kernel),&(def_entry->root),&(def_entry->init_argv)))
 							{
 								def_entry->name = "default";
 								DEBUG("have a default entry\n");

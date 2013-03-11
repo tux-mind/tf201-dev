@@ -16,6 +16,8 @@ void free_entry(menu_entry *item)
 		free(item->name);
 	if(item->blkdev)
 		free(item->blkdev);
+	if(item->kernel)
+		free(item->kernel);
 	if(item->root)
 		free(item->root);
 	if(item->init_argv)
@@ -34,7 +36,7 @@ void free_menu(menu_entry *list)
 		free_entry(current);
 }
 
-menu_entry *add_entry(menu_entry *list, char *_name, char *_blkdev, char *_root, char **_init_argv)
+menu_entry *add_entry(menu_entry *list, char *_name, char *_blkdev,char *_kernel, char *_root, char **_init_argv)
 {
 	menu_entry *item;
 	static unsigned short id = 1;
@@ -66,6 +68,7 @@ menu_entry *add_entry(menu_entry *list, char *_name, char *_blkdev, char *_root,
 	item->id = id++;
 	item->name = name;
 	item->blkdev = _blkdev;
+	item->kernel = _kernel;
 	item->root = _root;
 	item->init_argv = _init_argv;
 	item->next = NULL;
