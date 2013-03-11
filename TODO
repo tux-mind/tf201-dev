@@ -1,3 +1,4 @@
 get alsa work without pulseaudio, for now sound works only with pulseaudio.
 make UI application for boot_chooser.
 check for abootimg, fastboot and blobpack executable in scripts.
+parse EXT4 magic bytes in try_loop_mount

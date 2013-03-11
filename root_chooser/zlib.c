@@ -40,7 +40,7 @@ char *zlib_decompress_file(const char *filename, off_t *r_size)
 	buf = malloc(allocated);
 	if(!buf)
 	{
-		ERROR("malloc - %s\n",strerror(errno));
+		FATAL("malloc - %s\n",strerror(errno));
 		gzclose(fp);
 		return NULL;
 	}
@@ -52,7 +52,7 @@ char *zlib_decompress_file(const char *filename, off_t *r_size)
 			{
 				free(buf);
 				gzclose(fp);
-				ERROR("realloc - %s\n",strerror(errno));
+				FATAL("realloc - %s\n",strerror(errno));
 				return NULL;
 			}
 			buf = tmp;

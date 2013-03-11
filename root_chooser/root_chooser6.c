@@ -1,4 +1,8 @@
 #include "root_chooser5.h"
+
+// if == 1 => someone called FATAL we have to exit
+int fatal_error;
+
 //fatal error occourred, boot up android
 void fatal(char **argv,char **envp)
 {
@@ -174,25 +178,30 @@ int parser(char *line,char **blkdev, char**kernel, char **root, char ***init_arg
 	return 0; // all ok
 }
 
+/* read current cmdline from proc 
+ * return the size of the readed command line.
+ * if an error occours 0 is returned.
+ * WARN: dest MUST be at least COMMAND_LINE_SIZE long
+ */
 int read_our_cmdline(char *dest)
 {
-	int fd;
+	int fd,len;
 
 	memset(dest,'\0',COMMAND_LINE_SIZE);
 
 	if((fd = open("/proc/cmdline",O_RDONLY)) < 0)
 	{
 		FATAL("cannot open \"/proc/cmdline\" - %s\n",strerror(errno));
-		return -1;
+		return 0;
 	}
-	if(read(fd, dest, COMMAND_LINE_SIZE*(sizeof(char))) < 0)
+	if((len = read(fd, dest, COMMAND_LINE_SIZE*(sizeof(char)))) < 0)
 	{
 		FATAL("cannot read \"/proc/cmdline\" -%s\n",strerror(errno));
 		close(fd);
-		return -1;
+		return 0;
 	}
 	close(fd);
-	return 0;
+	return len;
 }
 
 /* if cmdline is NULL or his lenght is 0 => use our cmdline
@@ -202,63 +211,66 @@ int read_our_cmdline(char *dest)
 int cmdline_parser(char *line, char **cmdline)
 {
 	int fd,len;
-	char our_cmdline[COMMAND_LINE_SIZE];
+	static char our_cmdline[COMMAND_LINE_SIZE];
+	static int our_cmdline_len=0;
 
-	// use the provided one
-	if(line != NULL && (len = strlen(line)) > 0 && line[0] != '+')
+	if(!our_cmdline_len)
 	{
+		our_cmdline_len = read_our_cmdline(our_cmdline);
+		if(!our_cmdline_len)
+			return -1;
+	}
+	// use the given one
+	if(line != NULL && (len = strlen(line)) > 0)
+	{
+		//append to our_cmdline
+		if(line[0] == '+')
+			len += our_cmdline_len +1; // one more for the ' '
 		if(len > COMMAND_LINE_SIZE)
 		{
-			ERROR("command line too long\n");
-			return -1;
+			WARN("command line too long\n");
+			WARN("the current one will be used\n");
+			line = NULL;
 		}
-		*cmdline = malloc((len+1)*sizeof(char));
-		if(!cmdline)
-		{
-			FATAL("malloc - %s\n",strerror(errno));
-			return -1;
-		}
-		strncpy(*cmdline,line,len);
-		return 0;
 	}
-	// read our cmdline
-	else if(read_our_cmdline(our_cmdline))
-		return -1;
-	// use our_cmdline
-	else if(line == NULL || len == 0)
-	{
-		len = strlen(our_cmdline);
-		*cmdline = malloc((len+1)*sizeof(char));
-		if(!cmdline)
-		{
-			FATAL("malloc - %s\n",strerror(errno));
-			return -1;
-		}
-		strncpy(*cmdline,our_cmdline,len);
-		return 0;
-	}
-	// extend our cmdline
 	else
 	{
-		len += strlen(our_cmdline);
-		*cmdline = malloc((len+1)*sizeof(char));
-		snpritnf(*cmdline,len,"%s %s",our_cmdline,line+1);
-		return 0;
+		len = our_cmdline_len;
+		line = NULL;
 	}
+		
+	*cmdline = malloc((len+1)*sizeof(char));
+	if(!cmdline)
+	{
+		FATAL("malloc - %s\n",strerror(errno));
+		return -1;
+	}
+	// use our_cmdline
+	if(line == NULL)
+		strncpy(*cmdline,our_cmdline,len);
+	//extend our commandline
+	else if(line[0] == '+')
+		snprintf(*cmdline,len,"%s %s",our_cmdline,line+1);
+	// use the given one
+	else
+		strncpy(*cmdline,line,len);
+	*(*cmdline +len) = '\0';
 }
-
-int open_console(char **envp)
+/** open console for the first time
+ * NOTE: we need /sys mounted
+ */
+int open_console()
 {
 	int i;
 
-	mdev(envp);
+	mdev();
 	if(access(CONSOLE,R_OK|W_OK))
 	{ // no console yet...wait until timeout
 		sleep(1);
 		for(i=1;access(CONSOLE,R_OK|W_OK) && i < TIMEOUT;i++)
 		{
 			sleep(1);
-			mdev(envp);
+			mdev();
 		}
 		if(i==TIMEOUT) // no console availbale ( user it's using an older kernel )
 		{
@@ -416,203 +428,199 @@ int parse_data_directory(menu_entry **list)
 	return 0;
 }
 
+int wait_for_device(char *blkdev)
+{
+	int i;
+	if(access(blkdev,R_OK) && !mount("sysfs","/sys","sysfs",MS_RELATIME,""))
+	{
+		DEBUG("block device \"%s\" not found.\n",blkdev);
+		INFO("waiting for device...\n");
+		sleep(1);
+		mdev();
+		for(i=1;access(blkdev,R_OK) && i < TIMEOUT;i++)
+		{
+			sleep(1);
+			mdev();
+		}
+		umount("/sys");
+		if(i==TIMEOUT)
+			return -1;
+	}
+	return 0;
+}
+
 int main(int argc, char **argv, char **envp)
 {
 	int i;
 	menu_entry *list=NULL,*item,*def_entry=NULL;
 	char *init_abs_path,**final_init_args,buff[MAX_LINE];
-	int loop_device_mounted;
+	int mounted_twice;
 	FILE *fin;
+	
+	// errors before open_console are fatal
+	fatal_error = 1;
 
-	printed_lines=0; // init printed_lines counter
 	//mount sys
-	if(!mount("sysfs","/sys","sysfs",MS_RELATIME,""))
+	if(mount("sysfs","/sys","sysfs",MS_RELATIME,""))
+		goto error;
+	//open the console ( this is required from version 5 )
+	if(open_console(envp))
 	{
-		if(!open_console(envp))
+		umount("/sys");
+		goto error;
+	}
+	// init printed_lines counter and fatal error flag
+	fatal_error=printed_lines=0;
+	umount("/sys");
+	printf(HEADER);
+	INFO("mounting /data\n");
+	//mount DATA_DEV partition into /data
+	if(mount(DATA_DEV,"/data","ext4",0,""))
+	{
+		FATAL("mounting %s on \"/data\" - %s\n",DATA_DEV,strerror(errno));
+		goto error;
+	}
+	// check for a default entry
+	def_entry = NULL;
+	if((fin=fopen(ROOT_FILE,"r")))
+	{
+		if((def_entry = malloc(sizeof(menu_entry))))
 		{
-			umount("/sys");
-			//mount DATA_DEV partition into /data
-			printf(HEADER);
-			INFO("mounting /data\n");
-			if(!mount(DATA_DEV,"/data","ext4",0,""))
+			if(fgets(buff,MAX_LINE,fin))
 			{
-				def_entry = NULL;
-				if((fin=fopen(ROOT_FILE,"r")))
+				fgets_fix(buff);
+				if(!parser(buff,&(def_entry->blkdev),&(def_entry->kernel),&(def_entry->root),&(def_entry->init_argv)))
 				{
-					if((def_entry = malloc(sizeof(menu_entry))))
-					{
-						if(fgets(buff,MAX_LINE,fin))
-						{
-							fgets_fix(buff);
-							if(!parser(buff,&(def_entry->blkdev),&(def_entry->kernel),&(def_entry->root),&(def_entry->init_argv)))
-							{
-								def_entry->name = "default";
-								DEBUG("have a default entry\n");
-							}
-							else
-							{
-								free(def_entry);
-								def_entry = NULL;
-							}
-						}
-						else
-						{
-							free(def_entry);
-							def_entry = NULL;
-						}
-					}
-					fclose(fin);
-				}
-				DEBUG("parsing %s\n",DATA_DIR);
-				if(!parse_data_directory(&list))
-				{
-					umount("/data");
-#ifdef STOP_BEFORE_MENU
-					press_enter();
-#endif
-					menu_prompt:
-					print_menu(list);
-					if((i=get_user_choice()) && (def_entry || i!=-1))
-					{
-						DEBUG("user choose %d\n",i);
-						if(i==-1)
-							item=def_entry;
-						else
-							item=get_item_by_id(list,i);
-						if(item)
-						{
-							if(access(item->blkdev,R_OK) && !mount("sysfs","/sys","sysfs",MS_RELATIME,""))
-							{
-								DEBUG("block device \"%s\" not found.\n",item->blkdev);
-								DEBUG("rebuilding /dev\n");
-								sleep(1);
-								mdev(envp);
-								for(i=1;access(item->blkdev,R_OK) && i < TIMEOUT;i++)
-								{
-									sleep(1);
-									mdev(envp);
-								}
-								umount("/sys");
-							}
-							//mount blkdev on NEWROOT
-							if(!mount(item->blkdev,NEWROOT,"ext4",0,""))
-							{
-								DEBUG("mounted \"%s\" on \"%s\"\n",item->blkdev,NEWROOT);
-								loop_device_mounted = 0;
-								init_abs_path = item->root; // thus to have a trace of the old pointer
-								//if root is an ext image mount it on NEWROOT
-								if(!try_loop_mount(&(item->root),NEWROOT))
-								{
-									if(item->root != init_abs_path)
-										loop_device_mounted=1;
-									//check for init existence
-									i=strlen(item->root) + strlen((item->init_argv)[0]);
-									if((init_abs_path=malloc((i+1)*sizeof(char))))
-									{
-										strncpy(init_abs_path,item->root,i);
-										strncat(init_abs_path,(item->init_argv)[0],i);
-										init_abs_path[i]='\0';
-										if(!access(init_abs_path,R_OK|X_OK))
-										{
-											free(init_abs_path);
-											final_init_args = item->init_argv;
-											//chroot
-											if(!chdir(item->root) && !chroot(item->root))
-											{
-												INFO("booting \"%s\"\n",item->name);
-												item->init_argv=NULL;
-												free_menu(list);
-												if(def_entry!=NULL)
-												{
-													def_entry->name = NULL;
-													free_entry(def_entry);
-												}
-												execve(final_init_args[0],final_init_args,envp);
-											}
-											else
-											{
-												ERROR("cannot chroot/chdir to \"%s\" - \"%s\"",item->root,strerror(errno));
-												umount(NEWROOT);
-												if(loop_device_mounted)
-													umount(NEWROOT);
-												press_enter();
-												goto menu_prompt;
-											}
-										}
-										else
-										{
-											ERROR("cannot execute \"%s\" - %s\n",init_abs_path,strerror(errno));
-											free(init_abs_path);
-											umount(NEWROOT);
-											if(loop_device_mounted)
-												umount(NEWROOT);
-											press_enter();
-											goto menu_prompt;
-										}
-									}
-									else
-									{
-										FATAL("malloc - %s\n",strerror(errno));
-										free_menu(list);
-										umount(NEWROOT);
-										if(loop_device_mounted)
-											umount(NEWROOT);
-										press_enter();
-									}
-								}
-								else
-								{
-									umount(NEWROOT);
-									if(item->root) // try_loop_mount reallocate root, a malloc problem can be happend
-									{
-										ERROR("try_loop_mount \"%s\" on %s - %s\n",item->root,NEWROOT,strerror(errno));
-										press_enter();
-										goto menu_prompt;
-									}
-									else
-									{
-										FATAL("try_loop_mount: malloc - %s\n",strerror(errno));
-										free_menu(list);
-										press_enter();
-									}
-								}
-							}
-							else
-							{
-								ERROR("unable to mount \"%s\" on %s - %s\n",item->blkdev,NEWROOT,strerror(errno));
-								press_enter();
-								goto menu_prompt;
-							}
-						}
-						else
-						{
-							ERROR("wrong choice\n");
-							press_enter();
-							goto menu_prompt;
-						}
-					}
-					else
-					{
-						INFO("booting up android\n");
-					}
+					def_entry->name = "default";
+					DEBUG("have a default entry\n");
 				}
 				else
 				{
-					umount("/data");
-					press_enter();
+					free(def_entry);
+					def_entry = NULL;
 				}
 			}
 			else
 			{
-				ERROR("mounting %s on \"/data\" - %s\n",DATA_DEV,strerror(errno));
-				press_enter();
+				free(def_entry);
+				def_entry = NULL;
 			}
 		}
 		else
 		{
-			umount ("/sys");
+			FATAL("malloc - %s\n",strerror(errno));
+			goto error;
 		}
+		fclose(fin);
 	}
+	DEBUG("parsing %s\n",DATA_DIR);
+	if(parse_data_directory(&list))
+	{
+		umount("/data");
+		goto error;
+	}
+	umount("/data");
+#ifdef STOP_BEFORE_MENU
+	press_enter();
+#endif
+	/* we restart from here in case of not fatal errors */
+	menu_prompt:
+	print_menu(list);
+	i=get_user_choice();
+	DEBUG("user choose %d\n",i);
+	//android
+	if(i==0)
+	{
+		INFO("booting android\n");
+		fatal_error = 1; // force fatal() call 
+		goto error;
+	}
+	else if(i==-1)
+	{
+		if(!def_entry)
+		{
+			WARN("no default entries found, please make your choiche in %d seconds\n",2*TIMEOUT);
+			goto error;
+		}
+		item=def_entry;
+	}
+	else
+		item=get_item_by_id(list,i);
+	if(!item)
+	{
+		WARN("wrong choice\n");
+		goto error;
+	}
+	if(wait_for_device(item->blkdev))
+	{
+		ERROR("device \"%s\" not found\n",blkdev);
+		goto error;
+	}
+	//mount blkdev on NEWROOT
+	if(mount(item->blkdev,NEWROOT,"ext4",0,""))
+	{
+		ERROR("unable to mount \"%s\" on %s - %s\n",item->blkdev,NEWROOT,strerror(errno));
+		goto error;
+	}
+	DEBUG("mounted \"%s\" on \"%s\"\n",item->blkdev,NEWROOT);
+	mounted_twice = 0;
+	init_abs_path = item->root; // thus to have a trace of the old pointer
+	//if root is an ext dd image or and initrd file mount it on NEWROOT
+	if(try_loop_mount(&(item->root),NEWROOT) || try_initrd_mount(&(item->root),NEWROOT))
+	{
+		umount(NEWROOT);
+		goto error;
+	}
+	if(item->root != init_abs_path)
+		mounted_twice=1;
+	//check for init existence
+	i=strlen(item->root) + strlen((item->init_argv)[0]);
+	if(!(init_abs_path=malloc((i+1)*sizeof(char))))
+	{
+		umount(NEWROOT);
+		if(mounted_twice)
+			umount(NEWROOT);
+		FATAL("malloc - %s\n");
+		goto error;
+	}
+	strncpy(init_abs_path,item->root,i);
+	strncat(init_abs_path,(item->init_argv)[0],i);
+	init_abs_path[i]='\0';
+	if(access(init_abs_path,R_OK|X_OK))
+	{
+		ERROR("cannot execute \"%s\" - %s\n",init_abs_path,strerror(errno));
+		free(init_abs_path);
+		umount(NEWROOT);
+		if(mounted_twice)
+			umount(NEWROOT);
+		goto error;
+	}
+	free(init_abs_path);
+	final_init_args = item->init_argv;
+	//chroot
+	if(chdir(item->root) || chroot(item->root))
+	{
+		ERROR("cannot chroot/chdir to \"%s\" - \"%s\"",item->root,strerror(errno));
+		umount(NEWROOT);
+		if(mounted_twice)
+			umount(NEWROOT);
+		goto error;
+	}
+	INFO("booting \"%s\"\n",item->name);
+	item->init_argv=NULL;
+	free_menu(list);
+	if(def_entry!=NULL)
+	{
+		def_entry->name = NULL;
+		free_entry(def_entry);
+	}
+	execve(final_init_args[0],final_init_args,envp);
+	
+	error:
+	press_enter();
+	if(!fatal_error)
+		goto menu_prompt;
+	free_menu(list);
 	if(def_entry)
 	{
 		def_entry->name = NULL;
