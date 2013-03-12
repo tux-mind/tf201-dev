@@ -1,6 +1,6 @@
 #!/bin/bash
 ##
-# Script for remap TF201 keyboard
+# Script to remap the TF201 dock keyboard
 # 
 # WARNING: a v3 kernel is required!
 #

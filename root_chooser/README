@@ -1,27 +1,48 @@
-root_chooser it's a program that being executed as init,
-read configuration from more files and let the user choose what is the one to use.
+root_chooser is now a two part init system for the tf201:
+The host kernel (the one flashed on the device), and a guest kernel.
+This allows seperate kernels for android and linux.
 
-the input files it's read from the device /dev/mmcblk0p8 ( DATA_DEV defined in the header file ).
-all files under the .root.d directory will be handled in the same way. ( DATA_DIR defined in the header file )
+The "host" initrd will boot on device startup.
+It will wait 10 seconds for the user to press a key.
+If no key is pressed, the default configuration is automatically booted.
+Otherwise, a menu will be displayed with a list of configs.
+Upon selection of a config, a new kernel will be called with "kexec hardboot".
+If any error occurs, android will be booted.
 
-after root_chooser successfully read the first line of a file, he parse it as follow:
-"blkdev:root_directory_or_image:init_path init_args"
-where 	blkdev is the block device to mount.
-	root_directory_or_image is the directory on blkdev where your linux system lives
-				or the ext4 dd image on blkdev of your linux system.
-	init_path is the path to the init program ( usually /sbin/init ).
-	init_args are optional args for the init program.
+The default configuration is /data/.root
+The configuration directory is /data/.root.d
+(note: /data is defined by DATA_DEV as /dev/mmcblk0p8)
 
-if no error occours root_chooser will mount blkdev on /newroot. ( NEWROOT defined in the header file )
-if root_directory_or_image it's an ext4 dd image will mount it on /newrot.
-change current directory and root to /newroot.
-substitute himself with init_path plus init_args if given.
+The configs wil be parsed as follows:
+	DESCRIPTION
+	blkdev:kernel:initrd
+	CMDLINE
 
-if an error occours root_chooser will print this error to the console
-and will wait until user press ENTER.
-if the error is fatal root_choooser will boot up android after user hit ENTER,
-otherwise root_chooser will going on.
+# DESCRIPTION = an optional description
+# blkdev = the device where the kernel and initrd are contained
+# kernel = path to the kernel image ( uImage / zImage / Image )
+# initrd = path to an initrd image
+# CMDLINE = custom commandline to pass to your kernel 
+
+if CMDLINE does not exist, it will use default values
+if CMDLINE begins with a '+' the options will be appended to the default CMDLINE
+otherwise the provided CMDLINE will be used.
 
 *** LIMITS ***
 init_args are limited to INIT_MAX_ARGS defined in the header file. ( now it's 15 )
 the configuration line can be at maximum MAX_LINE defined in the header file. ( now it's 255 )
+
+#########################
+
+An optional "guest" initrd exists.
+It will read the provided commandline and
+mount the desired rootfs (/dev/*),
+chroot into the desired folder (or .img file),
+and call the new init (/sbin/init)
+
+note: any errors here are "fatal" and will not continue into android.
+It is up to the kernel and initrd to procede as it wants.
+You can still hold down power to force a reboot into the original "host" kernel.
+
+This allows multiple installations to reside in the same partition.
+ex: /data/gentoo, /data/alarm, etc

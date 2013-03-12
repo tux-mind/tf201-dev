@@ -6,9 +6,18 @@ brightness.sh:
  "i" to toggle ips
  "+" to increase
  "-" to decrase
- "=" to use saved value
+ <nothing> to use saved value
 
  after any operation the brightness is saved in a file (keep the same brightness across reboots)
+
+cpu.sh:
+ <properties> to change the cpu settings
+ <nothing> to use saved value
+
+lid.sh:
+ Hacky, no inotify on /sys
+ Simply run the script and the screen will turn off when the dock is closed
+ Warning! If bl_power=1, it may be difficult to reenable the screen without doing a hard boot
 
 touchpad.sh:
  "on" to enable

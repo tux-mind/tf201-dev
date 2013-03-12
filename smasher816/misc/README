@@ -1,6 +1,7 @@
 My personal config files.
 Use as an example for your own :)
 
+#OUTDATED BY SETKEYCODES
 xbindkeysrc: A more "pc like" layout
     Back = Escape
     Home = Super_L (Windows Key)
@@ -10,3 +11,5 @@ xbindkeysrc: A more "pc like" layout
 Xmodmap: keybinds for the media keys
 
 .xinitrc: Set all the things
+
+asound.conf: Get sound working

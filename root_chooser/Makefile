@@ -1,3 +1,7 @@
+# may require edits to reflect your toolchain and compiler options
+# -static is required to build standalone executables
+# -Werror forces you to write good code
+
 CC=arm-unknown-linux-gnueabi-gcc
 LD=arm-unknown-linux-gnueabi-ld
 CFLAGS=-Wall -Werror -g -static
@@ -5,6 +9,8 @@ LDFLAGS= -llzma -lz
 TARGET_BIN=root_chooser
 
 all: v6
+
+# placeholder for "guest" init
 
 v6: root_chooser6.c menu2.o lzma.o zlib.o sha256.o kexec.o
 	$(CC) $(CFLAGS) -o $(TARGET_BIN) $? $(LDFLAGS)

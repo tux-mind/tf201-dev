@@ -1,6 +1,13 @@
 #ifndef _MENU_H
 #define _MENU_H
 
+#include "common.h"
+
+// allow the user to drop into a shell provided by busybox
+#ifdef DEVELOPMENT
+ #define SHELL
+#endif
+
 typedef struct _menu_entry
 {
 	unsigned int id;

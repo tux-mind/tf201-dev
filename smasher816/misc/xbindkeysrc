@@ -18,10 +18,14 @@
 	m:0x0 + c:69
 	F3
 
+"/usr/bin/chromium --renderer-cmd-prefix='env'"
+	m:0x0 + c:158
+	CF86WWW
+
 "/usr/bin/urxvt"
 	m:0x0 + c:70
 	F4
 
-"/usr/bin/i3lock -c 000000"
+"/usr/bin/slock"
 	m:0x0 + c:150
 	XF86Sleep

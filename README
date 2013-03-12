@@ -1,17 +1,16 @@
-Please visit http://wiki.gentoo.org/wiki/Asus_Transformer_Prime for more
-information.
+Please visit http://wiki.gentoo.org/wiki/Asus_Transformer_Prime for more information.
 
 o v[0-9]/ contains stable versions of boot images and kernels.
 
 o test/ contains in development stuff.
 
-o scripts/ scripts for generate images and tweak keyboard layout.
+o scripts/ scripts to generate images and tweak keyboard layout.
 
 o root_chooser/ tmux_mind's root_chooser program.
 
-o touchpad_control/ small program for activate/deactivate the touchpad.
+o touchpad_control/ small program tp activate/deactivate the touchpad.
 
 ** NOTE **
-you need to patch BlobTools for generate valid blob files.
+you need to patch BlobTools inorder to generate valid blob files.
 use these the files: https://github.com/CyanogenMod/android_device_asus_tf201/tree/ics/blobpack
-you need to build blobkpack only ( "$ make blobpack" )
+you only need to build blobkpack ( "$ make blobpack" )

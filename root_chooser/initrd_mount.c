@@ -10,7 +10,7 @@
 /** extract cpio contained in cpio_buffer in dst folder
  * @cpio_buffer: the cpio archive
  * @len: the length of the cpio_buffer
- * @dst: the directory to extract the archive
+ * @dst: the directory to extract the archive into
  */
 int cpio_copyin(char *cpio_buffer, unsigned long len, char *dst)
 {
@@ -50,7 +50,7 @@ int cpio_copyin(char *cpio_buffer, unsigned long len, char *dst)
 		write(pipefd[1],cpio_buffer,len);
 		close(pipefd[1]);
 		INFO("extracting initrd\n");
-		//HACK: use pipefd[0] for store exit status
+		// HACK: use pipefd[0] to store exit status
 		wait(&pipefd[0]);
 	}
 	if(WIFEXITED(pipefd[0]) && WEXITSTATUS(pipefd[0]) == EXIT_SUCCESS)
@@ -61,7 +61,7 @@ int cpio_copyin(char *cpio_buffer, unsigned long len, char *dst)
 	return -1;
 }
 
-/** try to mount a initrd on mountpoint
+/** try to mount an initrd on mountpoint
  * @file: path to the initrd file
  * @mountpoint: the directory where we mount to
  */

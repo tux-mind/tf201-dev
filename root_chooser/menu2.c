@@ -33,7 +33,12 @@ void free_menu(menu_entry *list)
 menu_entry *add_entry(menu_entry *list, char *_name, char *_blkdev,char *_kernel, char *_cmdline, char *_initrd)
 {
 	menu_entry *item;
-	static unsigned short id = 1;
+#ifdef SHELL
+	static unsigned short id = 5;
+#else
+	static unsigned short id = 4;
+#endif
+
 	char *name;
 	int len;
 
@@ -98,7 +103,15 @@ void print_menu(menu_entry *list)
 	rewind(stdout);
 	ftruncate(1,0);
 	// print entries
-	printf("0) Boot android\n");
+	// TODO: use chars. ex: 'r' for reboot
+	printf("0) boot android\n");
+	printf("1) reboot\n");
+	printf("2) poweroff\n");
+	printf("3) reboot recovery\n");
+#ifdef SHELL
+	printf("4) emergency shell\n");
+#endif
+	printf("   ------------------\n");
 	for(printed_lines=1,current=list;current;current=current->next,printed_lines++)
 		printf("%u) %s\n",current->id,current->name);
 }

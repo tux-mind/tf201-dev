@@ -1,4 +1,8 @@
-get alsa work without pulseaudio, for now sound works only with pulseaudio.
-make UI application for boot_chooser.
+get alsa work without pulseaudio, for now sound works only with pulseaudio. (fixed with asound.conf?)
+make UI application for boot_chooser. (Android app in progress by Smasher816)
 check for abootimg, fastboot and blobpack executable in scripts.
-parse EXT4 magic bytes in try_loop_mount
+parse EXT4 magic bytes in try_loop_mount (done?)
+
+Move to a more graphical root_chooser initrd (ncurses)
+Update documention to reflect the many recent changes.
+Bug squashing.

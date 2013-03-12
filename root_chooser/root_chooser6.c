@@ -3,11 +3,11 @@
 // if == 1 => someone called FATAL we have to exit
 int fatal_error;
 
-//fatal error occourred, boot up android
+// fatal error occourred, boot up android
 void fatal(char **argv,char **envp)
 {
-	//TODO: maybe we must make some error checking also there...
-	//lock android boot if wanna only adb
+	// TODO: add additional error checking?
+	// lock android boot if wanna only adb
 #ifndef ADB
 	chdir(NEWROOT);
 #endif
@@ -43,8 +43,8 @@ char *fgets_fix(char *string)
  * returned values are:
  *	0 if ok
  *	1 if a malloc error occourred or
- *		if a parse error occourred.
- * 	if an error occour errno it's set to the corresponding error number.
+ *    if a parse error occourred.
+ * 	if an error occoured, errno is set to the corresponding error number.
  */
 int parser(char *line,char **blkdev, char**kernel, char **initrd)
 {
@@ -54,14 +54,14 @@ int parser(char *line,char **blkdev, char**kernel, char **initrd)
 	// count args length
 	for(i=0,pos=line;*pos!=':'&&*pos!='\0';pos++)
 		i++;
-	// check for arg length
+	// check arg length
 	if(!i)
 	{
 		errno = EINVAL;
 		ERROR("missing block device\n");
 		return 1;
 	}
-	// allocate memory dynamically ( i love this things <3 )
+	// allocate memory dynamically ( i love this thing <3 )
 	*blkdev = malloc((i+1)*sizeof(char));
 	if(!*blkdev)
 	{
@@ -114,17 +114,17 @@ int parser(char *line,char **blkdev, char**kernel, char **initrd)
 			FATAL("malloc - %s\n",strerror(errno));
 			return 1;
 		}
-		// append readed value to NEWROOT
+		// append the read value to NEWROOT
 		strncpy(*initrd,NEWROOT,NEWROOT_STRLEN);
 		strncpy(*initrd+NEWROOT_STRLEN,pos - i,i);
 		*(*initrd + NEWROOT_STRLEN+i) = '\0';
 	}
 	else
 		*initrd=NULL;
-	return 0; // all ok
+	return 0; // everyting is ok
 }
 
-/* read current cmdline from proc
+/* read the current cmdline from proc
  * return the size of the readed command line.
  * if an error occours 0 is returned.
  * WARN: dest MUST be at least COMMAND_LINE_SIZE long
@@ -157,8 +157,8 @@ int read_our_cmdline(char *dest)
 	return len*sizeof(char);
 }
 
-/* if cmdline is NULL or his lenght is 0 => use our cmdline
- * else if cmdline start with the '+' sign => extend our cmdline with the provided one
+/* if cmdline is NULL or its length is 0 => use our cmdline
+ * else if cmdline starts with the '+' sign => extend our cmdline with the provided one
  * else cmdline = the provided cmdline
  */
 int cmdline_parser(char *line, char **cmdline)
@@ -176,13 +176,13 @@ int cmdline_parser(char *line, char **cmdline)
 	// use the given one
 	if(line != NULL && (len = strlen(line)) > 0)
 	{
-		//append to our_cmdline
+		// append to our_cmdline
 		if(line[0] == '+')
 			len += our_cmdline_len +1; // one more for the ' '
 		if(len > COMMAND_LINE_SIZE)
 		{
 			ERROR("command line too long\n");
-			WARN("the current one will be used\n");
+			WARN("the current one will be used instead\n");
 			line = NULL;
 		}
 	}
@@ -201,7 +201,7 @@ int cmdline_parser(char *line, char **cmdline)
 	// use our_cmdline
 	if(line == NULL)
 		strncpy(*cmdline,our_cmdline,len);
-	//extend our commandline
+	// extend our commandline
 	else if(line[0] == '+')
 		snprintf(*cmdline,len,"%s %s",our_cmdline,line+1);
 	// use the given one
@@ -209,41 +209,6 @@ int cmdline_parser(char *line, char **cmdline)
 		strncpy(*cmdline,line,len);
 	*(*cmdline +len) = '\n';
 	*(*cmdline +len+1) = '\0';
-	return 0;
-}
-
-/** open console for the first time
- * NOTE: we need /sys mounted
- */
-int open_console()
-{
-	int i;
-
-	mdev();
-	if(access(CONSOLE,R_OK|W_OK))
-	{ // no console yet...wait until timeout
-		sleep(1);
-		for(i=1;access(CONSOLE,R_OK|W_OK) && i < TIMEOUT;i++)
-		{
-			sleep(1);
-			mdev();
-		}
-		if(i==TIMEOUT) // no console availbale ( user it's using an older kernel )
-		{
-			errno = ETIMEDOUT;
-			return -1;
-		}
-	}
-	close(0);
-	close(1);
-	close(2);
-	setsid();
-	if((i = open(CONSOLE,O_RDWR|O_NOCTTY)) >= 0)
-	{
-		(void) ioctl(i, TIOCSCTTY, 1);
-		dup(i);
-		dup(i);
-	}
 	return 0;
 }
 
@@ -262,31 +227,77 @@ void take_console_control()
 	}
 }
 
+/** open console for the first time
+ *  NOTE: we need /sys mounted
+ */
+int open_console()
+{
+	int i;
+
+	mdev();
+	if(access(CONSOLE,R_OK|W_OK))
+	{ // no console yet... wait until timeout
+		sleep(1);
+		for(i=1;access(CONSOLE,R_OK|W_OK) && i < TIMEOUT;i++)
+		{
+			sleep(1);
+			mdev();
+		}
+		if(i==TIMEOUT) // no console availbale ( user it's using an older kernel )
+		{
+			errno = ETIMEDOUT;
+			return -1;
+		}
+	}
+	take_console_control();
+	return 0;
+}
+
+char getch() {
+        char buf = 0;
+        struct termios old = {0};
+        if (tcgetattr(0, &old) < 0)
+                return -1;
+        old.c_lflag &= ~ICANON;
+        old.c_lflag &= ~ECHO;
+        old.c_cc[VMIN] = 1;
+        old.c_cc[VTIME] = 0;
+        if (tcsetattr(0, TCSANOW, &old) < 0)
+                return -1;
+        if (read(0, &buf, 1) < 0)
+                return -1;
+        old.c_lflag |= ICANON;
+        old.c_lflag |= ECHO;
+        if (tcsetattr(0, TCSADRAIN, &old) < 0)
+                return -1;
+        return (buf);
+}
+
 void press_enter()
 {
 	char buff[MAX_LINE];
-	INFO("press <ENTER> for continue...");// the last "\n" is putted by the user
+	INFO("press <ENTER> to continue..."); // the last "\n" is added by the user
 	fgets(buff,MAX_LINE,stdin);
 }
 
-int get_user_choice()
+int wait_for_keypress(int timeout)
 {
-	int i,stat,timeout;
-	char buff[MAX_LINE];
+	int i,stat;
 	pid_t pid,wpid;
-
-	INFO("enter a number and press <ENTER>: ");
-	fflush(stdout);
-	timeout = TIMEOUT*2;
 
 	if((pid = fork()))
 	{
 		i=0;
+		take_console_control();
     do
 		{
 			wpid = waitpid(pid, &stat, WNOHANG);
 			if (wpid == 0)
 			{
+				if (timeout > 0) {
+					printf("\r\033[1KAutomatic boot in %2u seconds...", 10-i); // rewrite the line every second
+					fflush(stdout);
+				}
 				if (i < timeout)
 				{
 					sleep(1);
@@ -298,10 +309,7 @@ int get_user_choice()
     } while (wpid == 0 && i <= timeout);
 		take_console_control();
 		if(i>timeout || !WIFEXITED(stat))
-		{
-			stat = -1; // boot default
-			printf("\n"); // user don't press enter.
-		}
+			stat = -1; // no keypress
 		else
 			stat = WEXITSTATUS(stat);
 		return stat;
@@ -314,12 +322,41 @@ int get_user_choice()
 	else
 	{
 		take_console_control();
+		printf("\r\033[2K");
+		exit( getch() );
+		return 0; /* not reached */
+	}
+}
+
+int get_user_choice()
+{
+	int i,stat;
+	char buff[MAX_LINE];
+	pid_t pid;
+
+	printf("enter a number and press <ENTER>: ");
+	fflush(stdout);
+
+	if(!(pid = fork()))
+	{
+		take_console_control();
 		fgets(buff,MAX_LINE,stdin);
-		fgets_fix(buff);
 		DEBUG("child read \"%s\"\n",buff);
 		i = atoi(buff);
 		exit(i);
-		return 0; /* not reahced */
+		return 0; /* not reached */
+	}
+	if (pid < 0)
+	{
+		FATAL("cannot fork - %s\n",strerror(errno));
+		return 0;
+	}
+	else
+	{
+		waitpid(pid,&stat,0);
+		take_console_control();
+		stat = WEXITSTATUS(stat);
+		return stat;
 	}
 }
 
@@ -465,35 +502,69 @@ int check_for_default_config(menu_entry **def_entry)
 	return 0;
 }
 
+void init_reboot(int magic)
+{
+	// this could use a lot more cleanup (unmount, etc)
+	reboot(magic); // codes are: RB_AUTOBOOT, RB_HALT_SYSTEM, RB_POWER_OFF, etc
+	exit(0); // should not return on success
+}
+
+void reboot_recovery() {
+	FILE *misc = fopen("/dev/mmcblk0p3","w");
+	if (misc) {
+		fprintf(misc,"boot-recovery");
+		fclose(misc);
+	}
+	init_reboot(RB_AUTOBOOT);
+}
+
+#ifdef SHELL
+void shell(char **envp) {
+	char *sh_argv[] = SHELL_ARGS;
+	pid_t pid;
+	if (!(pid = fork())) {
+		take_console_control();
+		execve(BUSYBOX, sh_argv, envp);
+	}
+	waitpid(pid,NULL,0);
+	take_console_control();
+}
+#endif
+
 int main(int argc, char **argv, char **envp)
 {
 	int i;
 	menu_entry *list=NULL,*item,*def_entry=NULL;
 	char *kernel,*initrd,*cmdline;
 
-	// errors before open_console are fatals
+	// errors before open_console are fatal
 	fatal_error = 1;
 
-	//mount sys
+	// mount sys
 	if(mount("sysfs","/sys","sysfs",MS_RELATIME,""))
 		goto error;
-	//open the console ( this is required from version 5 )
+	// open the console ( this is required from version 5 )
 	if(open_console())
 	{
 		umount("/sys");
 		goto error;
 	}
+	umount("/sys");
+	// automatically boot in X seconds
+	if (wait_for_keypress(TIMEOUT_BOOT) == -1)
+		goto android; // boot android (TODO: boot default config)
+	
 	// init printed_lines counter and fatal error flag
 	fatal_error=printed_lines=0;
-	umount("/sys");
 	printf(HEADER);
+	// mount proc ( required by kexec )
 	if(mount("proc","/proc","proc",MS_RELATIME,""))
 	{
 		FATAL("cannot mount proc\n");
 		goto error;
 	}
 	INFO("mounting /data\n");
-	//mount DATA_DEV partition into /data
+	// mount DATA_DEV partition into /data
 	if(mount(DATA_DEV,"/data","ext4",0,""))
 	{
 		FATAL("mounting %s on \"/data\" - %s\n",DATA_DEV,strerror(errno));
@@ -509,74 +580,88 @@ int main(int argc, char **argv, char **envp)
 		goto error;
 	}
 	umount("/data");
-#ifdef STOP_BEFORE_MENU
-	press_enter();
-#endif
+
 	/* we restart from here in case of not fatal errors */
-	menu_prompt:
+menu_prompt:
+	//printf("\033[2J\033[H"); // this will clear the whole screen (sorry penguins)
 	print_menu(list);
 	i=get_user_choice();
-	DEBUG("user choose %d\n",i);
-	//android
-	if(i==0)
-	{
-		INFO("booting android\n");
-		fatal_error = 1; // force fatal() call
-		goto error;
-	}
-	else if(i==-1)
-	{
-		if(!def_entry)
-		{
-			WARN("no default entries found, please make your choiche in %d seconds\n",2*TIMEOUT);
+	DEBUG("user chose %d\n",i);
+
+	// decide what to do
+	switch (i) {
+		case 0: // android
+			INFO("booting android\n");
+			fatal_error = 1; // force fatal() call
 			goto error;
-		}
-		item=def_entry;
-	}
-	else
-		item=get_item_by_id(list,i);
-	if(!item)
-	{
-		WARN("wrong choice\n");
-		goto error;
-	}
-	if(wait_for_device(item->blkdev))
-	{
-		ERROR("device \"%s\" not found\n",item->blkdev);
-		goto error;
-	}
-	//mount blkdev on NEWROOT
-	if(mount(item->blkdev,NEWROOT,"ext4",0,""))
-	{
-		ERROR("unable to mount \"%s\" on %s - %s\n",item->blkdev,NEWROOT,strerror(errno));
-		goto error;
-	}
-	DEBUG("mounted \"%s\" on \"%s\"\n",item->blkdev,NEWROOT);
-	INFO("booting \"%s\"\n",item->name);
+		case 1: // reboot
+			init_reboot(RB_AUTOBOOT);
+			goto error;
+		case 2: // halt
+			init_reboot(RB_HALT_SYSTEM);
+			goto error;
+		case 3: // reboot recovery
+			reboot_recovery();
+			goto error;
+#ifdef SHELL
+		case 4: // busybox sh
+			shell(envp);
+			goto menu_prompt;
+#endif
+		default: // parsed config
+			if ((i==-1) && (!def_entry))
+			{
+				WARN("no default entry found, please make a choice");
+				goto error;
+			}
+			else
+				item=get_item_by_id(list,i);
+			if(!item)
+			{
+				WARN("invalid choice\n");
+				goto error;
+			}
+			if(wait_for_device(item->blkdev))
+			{
+				ERROR("device \"%s\" not found\n",item->blkdev);
+				goto error;
+			}
+			// mount blkdev on NEWROOT
+			if(mount(item->blkdev,NEWROOT,"ext4",0,""))
+			{
+				ERROR("unable to mount \"%s\" on %s - %s\n",item->blkdev,NEWROOT,strerror(errno));
+				goto error;
+			}
+			
+			// we made it, time to clean up and chroot
+			DEBUG("mounted \"%s\" on \"%s\"\n",item->blkdev,NEWROOT);
+			INFO("booting \"%s\"\n",item->name);
 
-	//store args locally
-	kernel = item->kernel;
-	initrd = item->initrd;
-	cmdline = item->cmdline;
-	// set to NULL to avoid free() from free_menu()
-	item->initrd = item->kernel = item->cmdline = NULL;
+			// store args locally
+			kernel = item->kernel;
+			initrd = item->initrd;
+			cmdline = item->cmdline;
+			// set to NULL to avoid free() from free_menu()
+			item->initrd = item->kernel = item->cmdline = NULL;
 
-	free_menu(list);
-	if(def_entry!=NULL)
-	{
-		def_entry->name = NULL;
-		free_entry(def_entry);
+			free_menu(list);
+			if(def_entry!=NULL)
+			{
+				def_entry->name = NULL;
+				free_entry(def_entry);
+			}
+			if(!fork())
+			{
+				kexec(kernel,initrd,cmdline); // reboot into the new kernel
+				exit(-1);
+			}
+			wait(NULL); // should not return on success
+			take_console_control();
+			FATAL("failed to kexec\n"); // we cannot go back, already freed everything...
 	}
-	if(!fork())
-	{
-		kexec(kernel,initrd,cmdline);
-		exit(-1);
-	}
-	wait(NULL);
-	take_console_control();
-	FATAL("failed to kexec\n"); // we cannot go back, already freed everything...
-	error:
-	press_enter();
+
+error:
+	press_enter(); // TODO: no need to pause for android
 	if(!fatal_error)
 		goto menu_prompt;
 	free_menu(list);
@@ -586,6 +671,7 @@ int main(int argc, char **argv, char **envp)
 		free_entry(def_entry);
 	}
 	umount("/proc");
+android:
 	fatal(argv,envp);
 	exit(EXIT_FAILURE);
 }
