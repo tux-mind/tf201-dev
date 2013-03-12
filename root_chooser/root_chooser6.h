@@ -1,33 +1,29 @@
-#define NEWROOT "/mnt/"
-#define NEWROOT_STRLEN 5
+#define NEWROOT "/newroot/"
+#define NEWROOT_STRLEN 9
+#define LOG "/newroot/root_chooser.log"
 #define BUSYBOX "/bin/busybox"
-#define TIMEOUT 5 /* time to wait for external block devices ( USB stick ) or console */
-#define TIMEOUT_BOOT 10 /* time to wait for the user to press a key */
+#define MAX_LINE 255
+#define TIMEOUT 5 /* time to wait for external block devices ( USB stick ) */
+#define INIT_MAX_ARGS 15 /* maximum number of arguments for the real init */
 
 #if NEWROOT_STRLEN > MAX_LINE
- #error "NEWROOT_STRLEN must be shorter then MAX_LINE"
+# error "NEWROOT_STRLEN must be shorter then MAX_LINE"
 #endif
 
+// start android init at start for give ADB access
+//#define ADB
+
 #define MDEV_ARGS { "/bin/mdev","-s",NULL }
-#define SHELL_ARGS { "/bin/sh","-s", NULL }
 
-// the device containing DATA_DIR
+//where we looking for .root file
 #define DATA_DEV "/dev/mmcblk0p8"
-// the directory contains all configs
-#define DATA_DIR "/data/.boot.d/"
-#define DATA_DIR_STRLEN 14
-// the name of the file where we read the default boot options
-#define DEFAULT_CONFIG "/data/.boot"
-// the console to use
-#define CONSOLE "/dev/tty1"
-// maximum length for a boot entry name
-#define MAX_NAME 120
+//the name of the file where we read the boot options
+#define ROOT_FILE "/data/.root"
+//the name of the temporary file where we read the boot options
+#define ROOT_TMP_FILE "/data/.root.tmp"
+//our option from /proc/cmdline
+#define CMDLINE_OPTION "newroot"
+#define CMDLINE_OPTION_LEN 7
 
-#define HEADER 	"root_chooser - version 6\n"\
-				"say THANKS to the 4 penguins!\n"\
-				"Open Source rocks! - tux_mind <massimo.dragano@gmail.com>\n"\
-				"                   - smasher816 <smasher816@gmail.com>\n\n"
-
-// from kexec.c
-int k_load(char *,char *,char *);
-void k_exec(void);
+//from loop_mount2.c
+int try_loop_mount(char **, const char *);
