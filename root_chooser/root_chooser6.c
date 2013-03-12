@@ -96,6 +96,9 @@ int parser(char *line,char **blkdev, char**kernel, char **initrd)
 	strncpy(*kernel,NEWROOT,NEWROOT_STRLEN);
 	strncpy(*kernel+NEWROOT_STRLEN,pos - i,i);
 	*(*kernel + NEWROOT_STRLEN+i) = '\0';
+	// skip token
+	if(*pos==':')
+		pos++;
 	// skip trailing '/'
 	if(*pos=='/')
 		pos++;
@@ -144,6 +147,12 @@ int read_our_cmdline(char *dest)
 		return 0;
 	}
 	close(fd);
+	for(fd=0;fd<len;fd++)
+		if(dest[fd]=='\n')
+		{
+			len = fd;
+			break;
+		}
 	return len;
 }
 
@@ -369,7 +378,6 @@ int parse_data_directory(menu_entry **list)
 					closedir(dir);
 					return -1;
 				}
-				WARN("parsing %s%s - %s\n",DATA_DIR,d->d_name,strerror(errno));
 				press_enter();
 				continue;
 			}
