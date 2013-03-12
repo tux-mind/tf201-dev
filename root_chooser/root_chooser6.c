@@ -1,7 +1,5 @@
-// todo update description and project name
-
 /*
- * root_chooser - v6 - choose the root directory.
+ * grub4droid - v6 - choose the root directory.
  * Copyright (C) massimo dragano <massimo.dragano@gmail.com>
  *
  * root_chooser is free software; you can redistribute it and/or
@@ -61,16 +59,13 @@ int fatal_error;
 void fatal(char **argv,char **envp)
 {
 	// TODO: add additional error checking?
-	// lock android boot if wanna only adb
-#ifndef ADB
 	chdir(NEWROOT);
-#endif
 	chroot(NEWROOT);
 	execve("/init",argv,envp);
 }
 
 /* make /dev from /sys */
-void mdev()
+void mdev(void)
 {
 	pid_t pid;
 	if(!(pid = fork()))
@@ -93,14 +88,103 @@ char *fgets_fix(char *string)
 	return string;
 }
 
-/* parse line as "blkdev:kernel:initrd"
+/* read the current cmdline from proc
+ * return the size of the readed command line.
+ * if an error occours 0 is returned.
+ * WARN: dest MUST be at least COMMAND_LINE_SIZE long
+ */
+int read_our_cmdline(char *dest)
+{
+	int fd,len;
+
+	memset(dest,'\0',COMMAND_LINE_SIZE);
+
+	if((fd = open("/proc/cmdline",O_RDONLY)) < 0)
+	{
+		FATAL("cannot open \"/proc/cmdline\" - %s\n",strerror(errno));
+		return 0;
+	}
+	if((len = read(fd, dest, COMMAND_LINE_SIZE*(sizeof(char)))) < 0)
+	{
+		FATAL("cannot read \"/proc/cmdline\" -%s\n",strerror(errno));
+		close(fd);
+		return 0;
+	}
+	close(fd);
+	for(fd=0;fd<len;fd++)
+		if(dest[fd]=='\n')
+		{
+			dest[fd]='\0';
+			len = fd;
+			break;
+		}
+	return len;
+}
+
+/* if cmdline is NULL or its length is 0 => use our cmdline
+ * else if cmdline starts with the '+' sign => extend our cmdline with the provided one
+ * else cmdline = the provided cmdline
+ */
+int cmdline_parser(char *line, char **cmdline)
+{
+	int len;
+	static char our_cmdline[COMMAND_LINE_SIZE];
+	static int our_cmdline_len=0;
+
+	if(!our_cmdline_len)
+	{
+		our_cmdline_len = read_our_cmdline(our_cmdline);
+		if(!our_cmdline_len)
+			return -1;
+	}
+	// use the given one
+	if(line != NULL && (len = strlen(line)) > 0)
+	{
+		// append to our_cmdline
+		if(line[0] == '+')
+			len += our_cmdline_len +1; // one more for the ' '
+		if(len > COMMAND_LINE_SIZE)
+		{
+			ERROR("command line too long\n");
+			WARN("the current one will be used instead\n");
+			line = NULL;
+		}
+	}
+	else
+	{
+		len = our_cmdline_len;
+		line = NULL;
+	}
+
+	*cmdline = malloc((len+1)*sizeof(char));
+	if(!cmdline)
+	{
+		FATAL("malloc - %s\n",strerror(errno));
+		*cmdline = NULL;
+		return -1;
+	}
+	// use our_cmdline
+	if(line == NULL)
+		strncpy(*cmdline,our_cmdline,len);
+	// extend our commandline
+	else if(line[0] == '+')
+		snprintf(*cmdline,len,"%s %s",our_cmdline,line+1);
+	// use the given one
+	else
+		strncpy(*cmdline,line,len);
+	*(*cmdline +len) = '\0';
+	//*(*cmdline +len+1) = '\0';
+	return 0;
+}
+
+/** parse line as "blkdev:kernel:initrd"
+ * set given char ** to NULL
+ * on return not allocated pointers are NULL ( for optional args like initrd )
  * returned values are:
  *	0 if ok
- *	1 if a malloc error occourred or
- *    if a parse error occourred.
- * 	if an error occoured, errno is set to the corresponding error number.
+ *	1 if an error occours
  */
-int parser(char *line,char **blkdev, char**kernel, char **initrd)
+int config_parser(char *line,char **blkdev, char**kernel, char **initrd)
 {
 	register char *pos;
 	register int i;
@@ -113,7 +197,6 @@ int parser(char *line,char **blkdev, char**kernel, char **initrd)
 	// check arg length
 	if(!i)
 	{
-		errno = EINVAL;
 		ERROR("missing block device\n");
 		return 1;
 	}
@@ -139,7 +222,6 @@ int parser(char *line,char **blkdev, char**kernel, char **initrd)
 	{
 		free(*blkdev);
 		*blkdev = NULL;
-		errno = EINVAL;
 		ERROR("missing kernel\n");
 		return 1;
 	}
@@ -178,101 +260,111 @@ int parser(char *line,char **blkdev, char**kernel, char **initrd)
 		strncpy(*initrd+NEWROOT_STRLEN,pos - i,i);
 		*(*initrd + NEWROOT_STRLEN+i) = '\0';
 	}
-	else
-		*initrd=NULL;
 	return 0; // everyting is ok
 }
 
-/* read the current cmdline from proc
- * return the size of the readed command line.
- * if an error occours 0 is returned.
- * WARN: dest MUST be at least COMMAND_LINE_SIZE long
+/** parse a file as follows:
+ * ----start----
+ * DESCRIPTION/NAME
+ * blkdev:kernel:initrd
+ * CMDLINE
+ * -----end-----
+ * we require a blkdev and kernel
+ * others are optionals
+ * check cmdline_parser for info about CMDLINE
+ * @file: the parsed file
+ * @fallback_name: name to use in no one has been found
+ * @list: the entries list
+ * @def_entry: optional pointer to the menu_entry struct
  */
-int read_our_cmdline(char *dest)
+int parser(char *file, char *fallback_name, menu_entry **list, menu_entry **def_entry)
 {
-	int fd,len;
+	FILE *fin;
+	char name_line[MAX_NAME],line[MAX_LINE],*blkdev,*kernel,*initrd,*cmdline,*name;
+	int name_len;
 
-	memset(dest,'\0',COMMAND_LINE_SIZE);
+	blkdev=kernel=initrd=cmdline=name=NULL;
 
-	if((fd = open("/proc/cmdline",O_RDONLY)) < 0)
+	if(!(fin=fopen(file,"r")))
 	{
-		FATAL("cannot open \"/proc/cmdline\" - %s\n",strerror(errno));
-		return 0;
-	}
-	if((len = read(fd, dest, COMMAND_LINE_SIZE*(sizeof(char)))) < 0)
-	{
-		FATAL("cannot read \"/proc/cmdline\" -%s\n",strerror(errno));
-		close(fd);
-		return 0;
-	}
-	close(fd);
-	for(fd=0;fd<len;fd++)
-		if(dest[fd]=='\n')
-		{
-			dest[fd]='\0';
-			len = fd;
-			break;
-		}
-	return len*sizeof(char);
-}
-
-/* if cmdline is NULL or its length is 0 => use our cmdline
- * else if cmdline starts with the '+' sign => extend our cmdline with the provided one
- * else cmdline = the provided cmdline
- */
-int cmdline_parser(char *line, char **cmdline)
-{
-	int len;
-	static char our_cmdline[COMMAND_LINE_SIZE];
-	static int our_cmdline_len=0;
-
-	if(!our_cmdline_len)
-	{
-		our_cmdline_len = read_our_cmdline(our_cmdline);
-		if(!our_cmdline_len)
-			return -1;
-	}
-	// use the given one
-	if(line != NULL && (len = strlen(line)) > 0)
-	{
-		// append to our_cmdline
-		if(line[0] == '+')
-			len += our_cmdline_len +1; // one more for the ' '
-		if(len > COMMAND_LINE_SIZE)
-		{
-			ERROR("command line too long\n");
-			WARN("the current one will be used instead\n");
-			line = NULL;
-		}
-	}
-	else
-	{
-		len = our_cmdline_len;
-		line = NULL;
-	}
-
-	*cmdline = malloc((len+2)*sizeof(char));
-	if(!cmdline)
-	{
-		FATAL("malloc - %s\n",strerror(errno));
-		*cmdline = NULL;
+		// if we are reading the default entry this isn't an error
+		if(!def_entry)
+			ERROR("cannot open \"%s\" - %s\n", file,strerror(errno));
+		//nothing to free, exit now
 		return -1;
 	}
-	// use our_cmdline
-	if(line == NULL)
-		strncpy(*cmdline,our_cmdline,len);
-	// extend our commandline
-	else if(line[0] == '+')
-		snprintf(*cmdline,len,"%s %s",our_cmdline,line+1);
-	// use the given one
-	else
-		strncpy(*cmdline,line,len);
-	*(*cmdline +len) = '\n';
-	*(*cmdline +len+1) = '\0';
+
+	if(!fgets(name_line,MAX_NAME,fin) || !fgets(line,MAX_LINE,fin)) // read the second line
+	{
+		fclose(fin);
+		// error
+		if(!feof(fin))
+		{
+			ERROR("cannot read \"%s\" - %s\n",file,strerror(errno));
+			return -1;
+		}
+		WARN("file \"%s\" must have at least 2 lines\n",file);
+		return -1;
+	}
+	fgets_fix(name_line);
+	fgets_fix(line);
+	name_len = strlen(name_line);
+	if(!name_len) // no name
+	{
+		WARN("file \"%s\" don't have a DESCRIPTION/NAME\n",file);
+		strncpy(name_line,fallback_name,MAX_NAME);
+		name_len = strlen(name_line);
+		INFO("will use \"%s\" as name\n",fallback_name);
+	}
+	if(!(name = malloc((name_len+1)*sizeof(char))))
+	{
+		fclose(fin);
+		FATAL("malloc - %s\n",strerror(errno));
+		return -1;
+	}
+	if (
+		config_parser(line,&blkdev,&kernel,&initrd) ||
+		cmdline_parser(fgets_fix(fgets(line,MAX_LINE,fin)),&cmdline)
+	)
+		goto error_with_fclose;
+	fclose(fin);
+	if(!def_entry)
+	{
+		*list = add_entry(*list, name, blkdev, kernel, cmdline, initrd);
+		return 0;
+	}
+	// we are building the default entry, which isn't in the list
+	*def_entry = malloc(sizeof(menu_entry));
+	if(!(*def_entry))
+	{
+		FATAL("malloc - %s\n",strerror(errno));
+		goto error;
+	}
+	(*def_entry)->name 		= name;
+	(*def_entry)->kernel 	= kernel;
+	(*def_entry)->initrd 	= initrd;
+	(*def_entry)->blkdev 	= blkdev;
+	(*def_entry)->cmdline	= cmdline;
+	(*def_entry)->next = NULL;
 	return 0;
+
+error_with_fclose:
+	fclose(fin);
+error:
+	if(blkdev)
+		free(blkdev);
+	if(kernel)
+		free(kernel);
+	if(initrd)
+		free(initrd);
+	if(cmdline)
+		free(cmdline);
+	if(name)
+		free(name);
+	return -1;
 }
 
-void take_console_control()
+void take_console_control(void)
 {
 	int i;
 	close(0);
@@ -290,7 +382,7 @@ void take_console_control()
 /** open console for the first time
  *  NOTE: we need /sys mounted
  */
-int open_console()
+int open_console(void)
 {
 	int i;
 
@@ -333,45 +425,41 @@ char getch() {
         return (buf);
 }
 
-void press_enter()
+void press_enter(void)
 {
 	char buff[MAX_LINE];
 	INFO("press <ENTER> to continue..."); // the last "\n" is added by the user
 	fgets(buff,MAX_LINE,stdin);
 }
 
-int wait_for_keypress()
+int wait_for_keypress(void)
 {
-	int i,stat,timeout;
+	int stat,timeout;
 	pid_t pid,wpid;
 
 	timeout = TIMEOUT_BOOT;
 
 	if((pid = fork()))
 	{
-		i=0;
 		take_console_control();
     do
 		{
 			wpid = waitpid(pid, &stat, WNOHANG);
 			if (wpid == 0)
 			{
-				if (timeout > 0) {
-					printf("\r\033[1KAutomatic boot in %2u seconds...", 10-i); // rewrite the line every second
+				if (timeout) {
+					printf("\r\033[1KAutomatic boot in %2u seconds...", timeout); // rewrite the line every second
 					fflush(stdout);
 				}
-				if (i < timeout)
-				{
+				if (timeout--)
 					sleep(1);
-					i++;
-				}
 				else
 					kill(pid, SIGKILL);
 			}
-    } while (wpid == 0 && i <= timeout);
+    } while (wpid == 0 && timeout);
 		take_console_control();
-		if(i>timeout || !WIFEXITED(stat))
-			stat = -1; // no keypress
+		if(!timeout || !WIFEXITED(stat))
+			stat = MENU_DEFAULT_NUM; // no keypress
 		else
 			stat = WEXITSTATUS(stat);
 		return stat;
@@ -390,7 +478,7 @@ int wait_for_keypress()
 	}
 }
 
-int get_user_choice()
+int get_user_choice(void)
 {
 	int i,stat;
 	char buff[MAX_LINE];
@@ -407,6 +495,9 @@ int get_user_choice()
 		for(i=0;i<MAX_LINE && buff[i] != '\0' && isspace(buff[i]);i++);
 		switch(buff[i])
 		{
+			case MENU_ANDROID:
+				i = MENU_ANDROID_NUM;
+				break;
 			case MENU_DEFAULT:
 				i = MENU_DEFAULT_NUM;
 				break;
@@ -425,7 +516,7 @@ int get_user_choice()
 				break;
 #endif
 			default:
-				i = atoi(buff[i]);
+				i = atoi(buff);
 		}
 		exit(i);
 		return 0; /* not reached */
@@ -448,75 +539,36 @@ int parse_data_directory(menu_entry **list)
 {
 	DIR *dir;
 	struct dirent *d;
-	FILE *file;
-	char line[MAX_LINE],*blkdev,*kernel,*cmdline,*initrd,*path;
-	int len;
 
-	if((dir = opendir(DATA_DIR)) == NULL)
+	if(chdir(DATA_DIR))
 	{
-		ERROR("opening %s - %s\n",DATA_DIR,strerror(errno));
+		FATAL("cannot chdir to \"%s\" - %s\n",DATA_DIR,strerror(errno));
+		return -1;
+	}
+	if((dir = opendir(".")) == NULL)
+	{
+		ERROR("cannot open \"%s\" - %s\n",DATA_DIR,strerror(errno));
+		chdir("/");
 		return -1;
 	}
 	while((d = readdir(dir)) != NULL)
 		if(d->d_type != DT_DIR)
 		{
-			len = strlen(d->d_name);
-			DEBUG("parsing %s [%d]\n",d->d_name,len);
-			if((path = malloc((DATA_DIR_STRLEN + len +1)*sizeof(char)))==NULL)
+			DEBUG("parsing %s\n",d->d_name);
+			if(parser(d->d_name,d->d_name,list,NULL))
 			{
-				FATAL("malloc - %s\n",strerror(errno));
-				closedir(dir);
-				return -1;
-			}
-			snprintf(path,DATA_DIR_STRLEN+len+1,"%s%s",DATA_DIR,d->d_name);
-			if((file = fopen(path,"r")) == NULL)
-			{
-				ERROR("opening \"%s\" - %s\n",path,strerror(errno));
-				closedir(dir);
-				free(path);
-				return -1;
-			}
-			free(path);
-			// check that there is a description, but copy it later
-			if((fgets(line,MAX_LINE,file)) == NULL)
-			{
-				ERROR("no description found\n");
-				ERROR("reading %s%s - %s\n",DATA_DIR,d->d_name,strerror(errno));
-				fclose(file);
-				closedir(dir);
-				return -1;
-			}
-			if((fgets(line,MAX_LINE,file)) == NULL)
-			{
-				ERROR("reading %s%s - %s\n",DATA_DIR,d->d_name,strerror(errno));
-				fclose(file);
-				closedir(dir);
-				return -1;
-			}
-			fgets_fix(line);
-			if(parser(line,&blkdev,&kernel,&initrd) || cmdline_parser(fgets_fix(fgets(line,MAX_LINE,file)),&(cmdline)))
-			{
-				fclose(file);
 				if(fatal_error)
 				{
 					closedir(dir);
+					chdir("/");
 					return -1;
 				}
 				press_enter();
 				continue;
 			}
-			rewind(file);
-			if(fgets(line,MAX_LINE,file) == NULL || strlen(line) == 0) // no name provided
-				*list = add_entry(*list,d->d_name,blkdev,kernel,cmdline,initrd);
-			else
-			{
-				fgets_fix(line);
-				DEBUG("description: %s\n",line);
-				*list = add_entry(*list,line,blkdev,kernel,cmdline,initrd);
-			}
-			fclose(file);
 		}
 	closedir(dir);
+	chdir("/");
 	return 0;
 }
 
@@ -541,72 +593,6 @@ int wait_for_device(char *blkdev)
 	return 0;
 }
 
-int check_for_default_config(menu_entry **def_entry)
-{
-	FILE *fin;
-	char name[MAX_NAME],buff[MAX_LINE];
-	int name_len;
-
-	*def_entry = NULL;
-	if((fin=fopen(ROOT_FILE,"r")))
-	{
-		if((*def_entry = malloc(sizeof(menu_entry))))
-		{
-			(*def_entry)->name = NULL;
-			if(fgets(name,MAX_NAME,fin) && fgets(buff,MAX_LINE,fin)) // read the second line
-			{
-				fgets_fix(name);
-				fgets_fix(buff);
-				if (
-					!parser(buff,&((*def_entry)->blkdev),&((*def_entry)->kernel),&((*def_entry)->initrd)) &&
-					!cmdline_parser(fgets_fix(fgets(buff,MAX_LINE,fin)),&((*def_entry)->cmdline))
-				)
-				{
-					name_len = strlen(name);
-					if(!name_len) // no name
-					{
-						name = "default";
-						name_len = 7;
-					}
-					(*def_entry)->name = malloc((len+1)*sizeof(char));
-					if(!(*def_entry)->name)
-					{
-						FATAL("malloc - %s\n",strerror(errno));
-						free(*def_entry);
-						*def_entry = NULL;
-						return -1;
-					}
-					strncpy((*def_entry)->name,name,len);
-					*((*def_entry)->name +len) = '\0';
-					have_default=1;
-					DEBUG("have a default entry\n");
-				}
-				else
-				{
-					// parsers set to NULL yet freed pointers
-					free_entry(*def_entry);
-					free(*def_entry);
-					*def_entry = NULL;
-					if(fatal_error)
-						return -1;
-				}
-			}
-			else
-			{
-				free(*def_entry);
-				*def_entry = NULL;
-			}
-		}
-		else
-		{
-			FATAL("malloc - %s\n",strerror(errno));
-			return -1;
-		}
-		fclose(fin);
-	}
-	return 0;
-}
-
 void init_reboot(int magic)
 {
 	// this could use a lot more cleanup (unmount, etc)
@@ -615,7 +601,8 @@ void init_reboot(int magic)
 	exit(-1);
 }
 
-void reboot_recovery() {
+void reboot_recovery(void)
+{
 	FILE *misc = fopen("/dev/mmcblk0p3","w");
 	if (misc) {
 		fprintf(misc,"boot-recovery");
@@ -625,7 +612,8 @@ void reboot_recovery() {
 }
 
 #ifdef SHELL
-void shell() {
+void shell(void)
+{
 	char *sh_argv[] = SHELL_ARGS;
 	pid_t pid;
 	if (!(pid = fork())) {
@@ -641,7 +629,6 @@ int main(int argc, char **argv, char **envp)
 {
 	int i;
 	menu_entry *list=NULL,*item,*def_entry=NULL;
-	char *kernel,*initrd,*cmdline;
 
 	// errors before open_console are fatal
 	fatal_error = 1;
@@ -657,7 +644,7 @@ int main(int argc, char **argv, char **envp)
 	}
 	umount("/sys");
 
-	// init printed_lines counter, fatal error flag and deafult entry flag
+	// init printed_lines counter, fatal error flag and default entry flag
 	fatal_error=printed_lines=have_default=0;
 	printf(HEADER);
 	// mount proc ( required by kexec )
@@ -674,9 +661,10 @@ int main(int argc, char **argv, char **envp)
 		goto error;
 	}
 	// check for a default entry
-	if(check_for_default_config(&def_entry))
+	if(parser(DEFAULT_CONFIG,"default",NULL,&def_entry) && fatal_error)
 		goto error;
-	DEBUG("parsing %s\n",DATA_DIR);
+	if(!have_default)
+		INFO("no default config found\n");
 	if(parse_data_directory(&list))
 	{
 		umount("/data");
@@ -684,15 +672,15 @@ int main(int argc, char **argv, char **envp)
 	}
 	clear_screen();
 	// automatically boot in TIMEOUT_BOOT seconds
-	if ((i=wait_for_keypress()) == -1)
+	if ((i=wait_for_keypress()) == MENU_DEFAULT_NUM)
 	{
 		if(def_entry==NULL) // no default entry, boot android
-			i=0;
+			i=MENU_ANDROID_NUM;
 		goto skip_menu; // automatic menu ( no input required )
 	}
 	umount("/data");
 
-	// now we have all data.
+	// now we have all data. ( NOTE: i contains the pressed key if needed )
 
 	/* we restart from here in case of not fatal errors */
 menu_prompt:
@@ -703,7 +691,7 @@ skip_menu:
 	// decide what to do
 	switch (i)
 	{
-		case 0: // android ( should i make this a define too ? )
+		case MENU_ANDROID_NUM:
 			INFO("booting android\n");
 			fatal_error = 1;
 			goto error;
@@ -748,7 +736,7 @@ skip_menu:
 		ERROR("unable to mount \"%s\" on %s - %s\n",item->blkdev,NEWROOT,strerror(errno));
 		goto error;
 	}
-	if(k_load(kernel,initrd,cmdline))
+	if(k_load(item->kernel,item->initrd,item->cmdline))
 	{
 		ERROR("unable to load guest kernel\n");
 		goto error;
@@ -758,10 +746,6 @@ skip_menu:
 	DEBUG("mounted \"%s\" on \"%s\"\n",item->blkdev,NEWROOT);
 	INFO("booting \"%s\"\n",item->name);
 
-	// store args locally
-	kernel = item->kernel;
-	initrd = item->initrd;
-	cmdline = item->cmdline;
 	// set to NULL to avoid free() from free_menu()
 	item->initrd = item->kernel = item->cmdline = NULL;
 
@@ -769,7 +753,7 @@ skip_menu:
 	if(have_default)
 	{
 		free_entry(def_entry);
-		free(*def_entry);
+		free(def_entry);
 	}
 	if(!fork())
 	{
