@@ -7,13 +7,25 @@ ASUS_TP_CONTROL=0x8004F405
 ASUS_TP_ON=1
 ASUS_TP_OFF=0
 
-def writeFile(data, file):
-	if file==None: file=ASUSDEC
+I2C='/sys/devices/platform/tegra-i2c.1/i2c-1/1-0019/ec_tp_enable'
 
+def accessFile(file, mode):
 	if not os.access(file, os.F_OK):
 		sys.exit('Error: ' + file + ' is not a valid device')
-	if not os.access(file, os.W_OK):
-		sys.exit('Error: you do not have permission to write to ' + file + '\nTry running as root')
+	if not os.access(file, mode):
+		sys.exit('Error: you do not have permission to access ' + file + '\nTry running as root')
+
+def readFile(file):
+	if file==None: file=I2C
+	accessFile(file, os.R_OK)
+	dev = open(file, 'r')
+	data = dev.read()
+	dev.close()
+	return data
+
+def writeFile(data, file):
+	if file==None: file=ASUSDEC
+	accessFile(file, os.W_OK)
 	dev = open(file, 'w')
 	fcntl.ioctl(dev, ASUS_TP_CONTROL, data)
 	dev.close()
@@ -22,15 +34,20 @@ def init():
 	parser = argparse.ArgumentParser(description='Controll the Asus keyboard dock touchpad')
 	parser.add_argument('-e', '--enable', action='store_true', help='Enable the touchpad')
 	parser.add_argument('-d', '--disable', action='store_true', help='Disable the touchpad')
+	parser.add_argument('-s', '--status', action='store_true', help='The current status')
 	parser.add_argument('-f', '--file', action='store', help='the /dev file to use')
 	args = parser.parse_args()
 
 	if args.enable and args.disable:
-		sys.exit('Error: you can use both -e and -d')
+		sys.exit('Error: you cannot use both -e and -d')
 	elif args.enable:
 		writeFile(ASUS_TP_ON, args.file)
 	elif args.disable:
 		writeFile(ASUS_TP_OFF, args.file)
+	elif args.status:
+		tmp = readFile(args.file)
+		if '0' in tmp: print('Disabled')
+		if '1' in tmp: print('Enabled')
 	else:
 		sys.exit('Error: you must specify a parameter\nUse -h for help')
 

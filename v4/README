@@ -1,6 +1,6 @@
 NOTE:
-the kernel it's the same of the v3 stable images.
-all entry in changelog are related to root_chooser since it's the only difference from v3.
+the kernel is the same as the v3 stable images.
+all entries in changelog are related to root_chooser since it's the only difference from v3.
 
 ChangeLog:
 using console for printing messages.

@@ -1,2 +1,2 @@
-this is a small program for enable/disable the touchpad using the asusdec ioctl.
+this is a small program to enable/disable the touchpad using the asusdec ioctl.
 call it with -h|--help for help.

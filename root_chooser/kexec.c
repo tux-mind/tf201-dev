@@ -178,7 +178,7 @@ unsigned long locate_hole(struct kexec_info *info,
 	hole_base = ULONG_MAX;
 
 	if (hole_end == 0) {
-		ERROR("envalid hole end argument of 0 specified to locate_hole");
+		ERROR("invalid hole end argument of 0 specified to locate_hole");
 		return hole_base;
 	}
 
@@ -1550,6 +1550,8 @@ static int k_load(char *kernel,char *initrd,char *cmdline)
 	info.backup_start = 0;
 	info.kexec_flags = KEXEC_FLAGS;
 
+	DEBUG("%s\n%s\n%s\n", kernel, initrd, cmdline);
+
 	result = 0;
 	/* slurp in the input kernel */
 	kernel_buf = slurp_decompress_file(kernel, &kernel_size);
@@ -1618,6 +1620,9 @@ static int k_load(char *kernel,char *initrd,char *cmdline)
 
 static inline long kexec_reboot(void)
 {
+#ifdef DEVELOPMENT
+	press_enter(); // read any last minute information before we reboot
+#endif
 	return (long) syscall(__NR_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_KEXEC, 0);
 }
 
@@ -1634,7 +1639,7 @@ static int k_exec(void)
 int kexec(char *kernel, char *initrd, char *cmdline)
 {
 	mem_max = ULONG_MAX;
-	mem_min = 0xA0000000;
+	mem_min = 0xA0000000; //
 	if(!k_load(kernel,initrd,cmdline))
 		return k_exec();
 	return -1;

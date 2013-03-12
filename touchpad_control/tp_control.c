@@ -34,7 +34,7 @@ int do_ioctl_call(int arg)
 
 void usage(char *argv0, int exit_status,FILE *stream)
 {
-	fprintf(stream,"control asusdec-elantech touchpad\nUsage: %s [on|off]\n\nif no argument is given try toogle current state ( require v2 kernel ).\n",argv0);
+	fprintf(stream,"control asusdec-elantech touchpad\nUsage: %s [on|off]\n\nif no argument is given try to toogle the current state ( require v2 kernel ).\n",argv0);
 	exit(exit_status);
 }
 

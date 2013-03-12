@@ -1,15 +1,11 @@
 All of these files require python3 to be installed (it comes with gentoo)
 In order to change the device files, root access is required.
 
-Bootchooser: control where the prime will reboot
- "cancel" will stop any delayed shutdown
- "shutdown", "reboot", "recovery" are all self expanitory
- "android" will remove /data/.boot file, defaulting to android
+Battery: read battery levels
+ -i for internal
+ -d for dock
 
- anything else will be interpreted as a .boot configuration
-  Simply add a file to /data/.boot.d/, following the same syntax as .boot
-
-Backlight: get/set the display backlight brightness
+ Backlight: get/set the display backlight brightness
  There are three ranges
   raw: 0-255 (-r)
   norma: 10-100 ()
@@ -18,8 +14,18 @@ Backlight: get/set the display backlight brightness
  --set, --inc, --dec all take perecents of the specified range
  No parameters will output the current brightness
 
+ Cpu: Control the tegra3 cpu specific properties
+ -m overclock|performance|balanced|powersave
+
+#NEEDS TO BE UPDATED FOR ROOTCHOOSER V5
+Bootchooser: control where the prime will reboot
+ "cancel" will stop any delayed shutdown
+ "shutdown", "reboot", "recovery" are all self expanitory
+ "android" will remove /data/.boot file, defaulting to android
+
+ anything else will be interpreted as a .boot configuration
+  Simply add a file to /data/.root.d/, following the same syntax as .root
+
 Touchpad: control the touchpad
  -e to enable
  -d to disable
-
- its that simple

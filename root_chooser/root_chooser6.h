@@ -1,3 +1,5 @@
+// todo update description and project name
+
 /*
  * root_chooser - v6 - choose the root directory.
  * Copyright (C) massimo dragano <massimo.dragano@gmail.com>
@@ -16,22 +18,18 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * roo_choooser works as follow:
+ * root_choooser works as follows:
  *
- * 1) mount DATA_DEV on /data
- * 2) read the contents of /data/.root(.tmp)?
- * 3) delete reded file if it's name were .root.tmp
- * 4) parse as "block_device:root_directory:init_path init_args"
- * 5) mount block_device on /newroot
- * 6) if /newroot/root_directory is a ext img mount it on /newroot
- * 7) chroot /newroot/root_directory
- * 8) execve init_script
+ * 1) wait 10 seconds for the user to press a key.
+       if no key is pressed, boot the default configuration
+       if a key is pressed, display a menu for manual selection 
+ * 2) read the contents of /data/.root.d/
+ * 3) parse as "description \n blkdev:kernel:initrd \n cmdline"
+ * 4) kexec hardboot into the new kernel
+ * 5) the new kernel (and initrd) will then mount and boot the new system
  *
  * ** NOTE **
- * if something goes wrong or the first char
- * of the readed line is '#', goto point 7
- * with android initramfs into newroot and
- * root_directory = "/", init_path = "/init".
+ * if something goes wrong the kernel will continue and boot into android
  */
 
 
@@ -47,6 +45,8 @@
 #include <time.h>
 #include <sys/wait.h>
 #include <dirent.h>
+#include <sys/reboot.h>
+#include <termios.h>
 
 #include "common.h"
 #include "menu2.h"
@@ -56,32 +56,35 @@
 #define LOG "/newroot/root_chooser.log"
 #define BUSYBOX "/bin/busybox"
 #define TIMEOUT 5 /* time to wait for external block devices ( USB stick ) or console */
-#define INIT_MAX_ARGS 15 /* maximum number of arguments for the real init */
+#define TIMEOUT_BOOT 10 /* time to wait for the user to press a key */
 
 #if NEWROOT_STRLEN > MAX_LINE
-# error "NEWROOT_STRLEN must be shorter then MAX_LINE"
+ #error "NEWROOT_STRLEN must be shorter then MAX_LINE"
 #endif
 
-// start android init at start for give ADB access
+// start android init at start to give ADB access
+// TODO: is this still needed?
 //#define ADB
 
 #define MDEV_ARGS { "/bin/mdev","-s",NULL }
+#define SHELL_ARGS { "/bin/sh","-s", NULL }
 
-//where we looking for .root file
+// the device containing DATA_DIR
 #define DATA_DEV "/dev/mmcblk0p8"
-//the directory contains all configs
+// the directory contains all configs
 #define DATA_DIR "/data/.root.d/"
 #define DATA_DIR_STRLEN 14
-//the name of the file where we read the default boot options
+// the name of the file where we read the default boot options
 #define ROOT_FILE "/data/.root"
-//the console to use
+// the console to use
 #define CONSOLE "/dev/tty1"
 
-#define HEADER 	"root_chooser - version 5\n"\
-								"say THANKS to the 4 penguins!\n"\
-								"Open Source rocks! - tux_mind <massimo.dragano@gmail.com>\n\n"
+#define HEADER 	"root_chooser - version 6\n"\
+				"say THANKS to the 4 penguins!\n"\
+				"Open Source rocks! - tux_mind <massimo.dragano@gmail.com>\n"\
+				"                   - smasher816 <smasher816@gmail.com>\n\n"
 
-//from loop_mount4.c
+// from loop_mount4.c
 //int try_loop_mount(char **, const char *);
-//from kexec.c
+// from kexec.c
 int kexec(char *, char *, char *);

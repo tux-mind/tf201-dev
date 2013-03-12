@@ -7,8 +7,9 @@ xrdb -merge ~/.Xresources
 xmodmap ~/.Xmodmap
 xbindkeys -f ~/.xbindkeysrc
 
-~/bin/brightness.sh =
+~/bin/brightness.sh
 ~/bin/touchpad.sh
+~/bin/cpu.sh
 
 while true; do
 	dwm 2>/dev/null

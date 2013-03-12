@@ -42,7 +42,8 @@ def percentToRaw(percent, ips=False, raw=False):
 			brightness = int(percent/100*150+10) #10-160 raw
 
 	if brightness < 0: brightness = 0
-	if brightness > 100: brightness = 100
+	if brightness > 255: brightness = 255
+
 	return brightness
 
 #Convert raw brightness to the percent (0-100) of a mode 
@@ -61,12 +62,16 @@ def rawToPercent(brightness, ips=False, raw=False):
 	if percent > 100: percent = 100
 	return int(percent)
 
-#Read a sysfs file
-def readSysfs(device):
+#Make sure we can read/write the file
+def accessSysfs(device, mode):
 	if not os.access(device, os.F_OK):
 		sys.exit('Error: ' + device + ' is not a valid device')
-	if not os.access(device, os.R_OK):
-		sys.exit('Error: you do not have permission to write to ' + device + '\nTry running as root')
+	if not os.access(device, mode):
+		sys.exit('Error: you do not have permission to access ' + device + '\nTry running as root')
+
+#Read a sysfs file
+def readSysfs(device):
+	accessSysfs(device, os.R_OK)
 	dev = open(device, 'r')
 	data = dev.read()
 	dev.close()
@@ -74,10 +79,7 @@ def readSysfs(device):
 
 #Write to a sysfs file
 def writeSysfs(data, device):
-	if not os.access(device, os.F_OK):
-		sys.exit('Error: ' + device + ' is not a valid device')
-	if not os.access(device, os.W_OK):
-		sys.exit('Error: you do not have permission to write to ' + device + '\nTry running as root')
+	accessSysfs(device, os.W_OK);
 	dev = open(device, 'w')
 	dev.write(data)
 	dev.close()
@@ -94,7 +96,7 @@ def getPower(device):
 	return ret
 
 #Enable or disable the screen backlight. WARNING: CAN FREEZE DEVICE
-def setPower(powered, device):
+def setPower(power, device):
 	if device==None: device=SYS_POWER
 	str = '0'
 	if not power: str='1'
@@ -127,8 +129,12 @@ def interact(device=None):
 	raw = getBrightness(device)
 	ips = False
 	if raw > 160: ips=True
-	brightness, ips = rawToPercent(raw, ips)
+	brightness = rawToPercent(raw, ips)
 	brightness = int( int(brightness/5)*5 ) #Round to the nearest multiple of 5
+
+	#How much room we have to work with (progress bar)
+	cols = os.popen('tput cols', 'r').read()
+	cols=int(columns)-15
 
 	#Controlls
 	output = ''
@@ -138,14 +144,15 @@ def interact(device=None):
 	#Input loop
 	while True:
 		#Format the output
-		output = '['
+		output = ' ['
 		for i in range(0,3-len(str(brightness)),1): output += ' ' #Numerical brightness
-		output += str(brightness) + ']['
-		for i in range(0,brightness,5): output += '#'             #Fill in a progress bar
-		for i in range(brightness,100,5): output += '-'
+		output += str(brightness) + '%]['
+		temp=int(brightness/100*cols)
+		for i in range(0,temp,1): output += '#'             #Fill in a progress bar
+		for i in range(0,cols-temp,1): output += '-'
 		output += ']'
 		if ips: output += '[IPS]'                                 #IPS status
-		else: output += '[   ]'
+		else: output += '[   ] '
 
 		#Redraw the output
 		sys.stdout.write('\r'+output)
@@ -163,12 +170,12 @@ def interact(device=None):
 		if brightness > 100: brightness = 100
 
 		#Change brightness
-		setBrightness( percentToRaw(brightness, ips, false, device) )
+		setBrightness( percentToRaw(brightness, ips, False), device )
 
 	#Clear line when done
 	tmp = '\r'
 	for i in range(0,len(output),1): tmp += ' '
-	tmp += '\033[F\r'
+	tmp += '\033[1F\r'
 	for i in range(0,len(help),1): tmp += ' '
 	tmp += '\033[F'
 	print(tmp)
@@ -181,7 +188,7 @@ def init():
 	parser.add_argument('-r', '--raw', action='store_true', help='Set the raw value (0-255)')
 	parser.add_argument('-p', '--power', action='store', type=int, default='-1', help='Turn on or off the display')
 	parser.add_argument('-d', '--device', action='store', help='the /sys device to use')
-	parser.add_argument('-s', '--set', action='store', type=int, dest='brightness', default='-1', help='Percent of screen brighness')
+	parser.add_argument('-s', '--set', action='store', type=int, dest='brightness', default='-1', help='Set the screen brighness percent')
 	parser.add_argument('--inc', action='store', type=int, default='-1', help='Increase the brightness by a percent')
 	parser.add_argument('--dec', action='store', type=int, default='-1', help='Decrease the brightness by a percent')
 	parser.add_argument('--interactive', action='store_true', help='Dynamically controll brightness with keyboard')
@@ -193,7 +200,7 @@ def init():
 	if args.interactive:
 		interact(args.device)
 	elif args.power != -1:
-		setPower(args.power, args.device)
+		setPower(args.power==1, args.device)
 	elif args.brightness != -1:
 		setBrightness( percentToRaw(args.brightness, args.ips, args.raw), args.device )
 	elif args.inc > 0:

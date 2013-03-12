@@ -41,9 +41,9 @@
 #define MS_LOOP 0x00010000
 
 /** COPYING NOTES
- * the following 3 functions contains code taken from
- * util-linux-ng:mount heavy shrinked because i known we run linux >= 3.1
- * this tell us that kernel have loop autoclear support.
+ * the following 3 functions contain code taken from
+ * util-linux-ng:mount heavily shrinked because i known we run linux >= 3.1
+ * this tells us that kernel has loop autoclear support.
  * TODO: is loop_info64_to_old needed ?
  */
 
@@ -92,7 +92,7 @@ int set_loop(const char *device, char *file,int *fd_to_close)
 	return 0;
 }
 
-/** this function try to mount the regular file loopfile on mountpoint thought loop devices.
+/** this function tries to mount the regular file loopfile on mountpoint though loop devices.
  * @loopfile:			the source file to mount. we don't support offset, so it MUST be an ext4 partition.
  * @mountpoint:		the directory were to mount the image file.
  */
