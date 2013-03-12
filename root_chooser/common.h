@@ -9,12 +9,13 @@
 #ifdef DEVELOPMENT
 #define DEBUG(x,args...) 	do{printf("[DEBUG] "x,##args);printed_lines++;}while(0)
 #define STOP_BEFORE_MENU
+#define SHELL // allow the user to drop into a shell provided by busybox
 #else
 #define DEBUG(x,args...)
 #endif
 
+
 #define MAX_LINE 255
 #define COMMAND_LINE_SIZE    1024
 
-extern int printed_lines;
-extern int fatal_error;
+extern int printed_lines,fatal_error,have_default;

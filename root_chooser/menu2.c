@@ -5,8 +5,9 @@
 #include <string.h>
 
 #include "menu2.h"
+#include "common.h"
 
-int printed_lines;
+int printed_lines,have_default;
 
 void free_entry(menu_entry *item)
 {
@@ -33,11 +34,7 @@ void free_menu(menu_entry *list)
 menu_entry *add_entry(menu_entry *list, char *_name, char *_blkdev,char *_kernel, char *_cmdline, char *_initrd)
 {
 	menu_entry *item;
-#ifdef SHELL
-	static unsigned short id = 5;
-#else
-	static unsigned short id = 4;
-#endif
+	static unsigned short id = 1;
 
 	char *name;
 	int len;
@@ -103,17 +100,28 @@ void print_menu(menu_entry *list)
 	rewind(stdout);
 	ftruncate(1,0);
 	// print entries
-	// TODO: use chars. ex: 'r' for reboot
-	printf("0) boot android\n");
-	printf("1) reboot\n");
-	printf("2) poweroff\n");
-	printf("3) reboot recovery\n");
+	if(have_default)
+		printf("%c) boot the default config\n",MENU_DEFAULT);
+	printf("%c) reboot\n",MENU_REBOOT);
+	printf("%c) poweroff\n",MENU_HALT);
+	printf("%c) reboot recovery\n",MENU_RECOVERY);
 #ifdef SHELL
-	printf("4) emergency shell\n");
+	printf("%c) emergency shell\n",MENU_SHELL);
 #endif
 	printf("   ------------------\n");
+	printf("0) boot android\n");
 	for(printed_lines=1,current=list;current;current=current->next,printed_lines++)
 		printf("%u) %s\n",current->id,current->name);
+}
+
+void clear_screen()
+{
+	int i;
+	for(i=0;i<printed_lines;i++)
+		printf("\033[A\033[2K"); // go UP and CLEAR line ( see VT100 reference )
+	rewind(stdout);
+	ftruncate(1,0);
+	printed_lines=0;
 }
 
 menu_entry *get_item_by_id(menu_entry *list, int id)

@@ -1,3 +1,57 @@
+// todo update description and project name
+
+/*
+ * root_chooser - v6 - choose the root directory.
+ * Copyright (C) massimo dragano <massimo.dragano@gmail.com>
+ *
+ * root_chooser is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * root_chooser is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+/* root_choooser works as follows:
+ *
+ * 1) read the contents of /data/.root.d/
+ * 2) parse as "description \n blkdev:kernel:initrd \n cmdline"
+ * 3) wait 10 seconds for the user to press a key.
+       if no key is pressed, boot the default configuration
+       if a key is pressed, display a menu for manual selection
+ * 4) kexec hardboot into the new kernel
+ * 5) the new kernel (and initrd) will then mount and boot the new system
+ *
+ * ** NOTE **
+ * if something goes wrong will continue and boot into android
+ */
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/mount.h>
+#include <fcntl.h>
+#include <time.h>
+#include <sys/wait.h>
+#include <dirent.h>
+#include <sys/reboot.h>
+#include <termios.h>
+#include <ctype.h>
+
+#include "common.h"
+#include "menu2.h"
 #include "root_chooser6.h"
 
 // if == 1 => someone called FATAL we have to exit
@@ -51,6 +105,8 @@ int parser(char *line,char **blkdev, char**kernel, char **initrd)
 	register char *pos;
 	register int i;
 
+	*blkdev=*kernel=*initrd=NULL;
+
 	// count args length
 	for(i=0,pos=line;*pos!=':'&&*pos!='\0';pos++)
 		i++;
@@ -82,6 +138,7 @@ int parser(char *line,char **blkdev, char**kernel, char **initrd)
 	if(!i)
 	{
 		free(*blkdev);
+		*blkdev = NULL;
 		errno = EINVAL;
 		ERROR("missing kernel\n");
 		return 1;
@@ -90,6 +147,7 @@ int parser(char *line,char **blkdev, char**kernel, char **initrd)
 	if(!*kernel)
 	{
 		free(*blkdev);
+		*blkdev = NULL;
 		FATAL("malloc - %s\n",strerror(errno));
 		return 1;
 	}
@@ -111,6 +169,7 @@ int parser(char *line,char **blkdev, char**kernel, char **initrd)
 		{
 			free(*blkdev);
 			free(*kernel);
+			*kernel = *blkdev = NULL;
 			FATAL("malloc - %s\n",strerror(errno));
 			return 1;
 		}
@@ -196,6 +255,7 @@ int cmdline_parser(char *line, char **cmdline)
 	if(!cmdline)
 	{
 		FATAL("malloc - %s\n",strerror(errno));
+		*cmdline = NULL;
 		return -1;
 	}
 	// use our_cmdline
@@ -280,10 +340,12 @@ void press_enter()
 	fgets(buff,MAX_LINE,stdin);
 }
 
-int wait_for_keypress(int timeout)
+int wait_for_keypress()
 {
-	int i,stat;
+	int i,stat,timeout;
 	pid_t pid,wpid;
+
+	timeout = TIMEOUT_BOOT;
 
 	if((pid = fork()))
 	{
@@ -341,8 +403,30 @@ int get_user_choice()
 	{
 		take_console_control();
 		fgets(buff,MAX_LINE,stdin);
-		DEBUG("child read \"%s\"\n",buff);
-		i = atoi(buff);
+		fgets_fix(buff);
+		for(i=0;i<MAX_LINE && buff[i] != '\0' && isspace(buff[i]);i++);
+		switch(buff[i])
+		{
+			case MENU_DEFAULT:
+				i = MENU_DEFAULT_NUM;
+				break;
+			case MENU_REBOOT:
+				i = MENU_REBOOT_NUM;
+				break;
+			case MENU_HALT:
+				i=MENU_HALT_NUM;
+				break;
+			case MENU_RECOVERY:
+				i=MENU_RECOVERY_NUM;
+				break;
+#ifdef SHELL
+			case MENU_SHELL:
+				i=MENU_SHELL_NUM;
+				break;
+#endif
+			default:
+				i = atoi(buff[i]);
+		}
 		exit(i);
 		return 0; /* not reached */
 	}
@@ -460,26 +544,47 @@ int wait_for_device(char *blkdev)
 int check_for_default_config(menu_entry **def_entry)
 {
 	FILE *fin;
-	char buff[MAX_LINE];
+	char name[MAX_NAME],buff[MAX_LINE];
+	int name_len;
 
 	*def_entry = NULL;
 	if((fin=fopen(ROOT_FILE,"r")))
 	{
 		if((*def_entry = malloc(sizeof(menu_entry))))
 		{
-			if(fgets(buff,MAX_LINE,fin) && fgets(buff,MAX_LINE,fin)) // read the second line
+			(*def_entry)->name = NULL;
+			if(fgets(name,MAX_NAME,fin) && fgets(buff,MAX_LINE,fin)) // read the second line
 			{
+				fgets_fix(name);
 				fgets_fix(buff);
 				if (
 					!parser(buff,&((*def_entry)->blkdev),&((*def_entry)->kernel),&((*def_entry)->initrd)) &&
 					!cmdline_parser(fgets_fix(fgets(buff,MAX_LINE,fin)),&((*def_entry)->cmdline))
 				)
 				{
-					(*def_entry)->name = "default";
+					name_len = strlen(name);
+					if(!name_len) // no name
+					{
+						name = "default";
+						name_len = 7;
+					}
+					(*def_entry)->name = malloc((len+1)*sizeof(char));
+					if(!(*def_entry)->name)
+					{
+						FATAL("malloc - %s\n",strerror(errno));
+						free(*def_entry);
+						*def_entry = NULL;
+						return -1;
+					}
+					strncpy((*def_entry)->name,name,len);
+					*((*def_entry)->name +len) = '\0';
+					have_default=1;
 					DEBUG("have a default entry\n");
 				}
 				else
 				{
+					// parsers set to NULL yet freed pointers
+					free_entry(*def_entry);
 					free(*def_entry);
 					*def_entry = NULL;
 					if(fatal_error)
@@ -506,7 +611,8 @@ void init_reboot(int magic)
 {
 	// this could use a lot more cleanup (unmount, etc)
 	reboot(magic); // codes are: RB_AUTOBOOT, RB_HALT_SYSTEM, RB_POWER_OFF, etc
-	exit(0); // should not return on success
+	FATAL("cannot reboot/shutdown\n");
+	exit(-1);
 }
 
 void reboot_recovery() {
@@ -519,12 +625,12 @@ void reboot_recovery() {
 }
 
 #ifdef SHELL
-void shell(char **envp) {
+void shell() {
 	char *sh_argv[] = SHELL_ARGS;
 	pid_t pid;
 	if (!(pid = fork())) {
 		take_console_control();
-		execve(BUSYBOX, sh_argv, envp);
+		execv(BUSYBOX, sh_argv);
 	}
 	waitpid(pid,NULL,0);
 	take_console_control();
@@ -550,12 +656,9 @@ int main(int argc, char **argv, char **envp)
 		goto error;
 	}
 	umount("/sys");
-	// automatically boot in X seconds
-	if (wait_for_keypress(TIMEOUT_BOOT) == -1)
-		goto android; // boot android (TODO: boot default config)
-	
-	// init printed_lines counter and fatal error flag
-	fatal_error=printed_lines=0;
+
+	// init printed_lines counter, fatal error flag and deafult entry flag
+	fatal_error=printed_lines=have_default=0;
 	printf(HEADER);
 	// mount proc ( required by kexec )
 	if(mount("proc","/proc","proc",MS_RELATIME,""))
@@ -579,99 +682,119 @@ int main(int argc, char **argv, char **envp)
 		umount("/data");
 		goto error;
 	}
+	clear_screen();
+	// automatically boot in TIMEOUT_BOOT seconds
+	if ((i=wait_for_keypress()) == -1)
+	{
+		if(def_entry==NULL) // no default entry, boot android
+			i=0;
+		goto skip_menu; // automatic menu ( no input required )
+	}
 	umount("/data");
+
+	// now we have all data.
 
 	/* we restart from here in case of not fatal errors */
 menu_prompt:
-	//printf("\033[2J\033[H"); // this will clear the whole screen (sorry penguins)
 	print_menu(list);
 	i=get_user_choice();
 	DEBUG("user chose %d\n",i);
-
+skip_menu:
 	// decide what to do
-	switch (i) {
-		case 0: // android
+	switch (i)
+	{
+		case 0: // android ( should i make this a define too ? )
 			INFO("booting android\n");
-			fatal_error = 1; // force fatal() call
+			fatal_error = 1;
 			goto error;
-		case 1: // reboot
-			init_reboot(RB_AUTOBOOT);
-			goto error;
-		case 2: // halt
-			init_reboot(RB_HALT_SYSTEM);
-			goto error;
-		case 3: // reboot recovery
-			reboot_recovery();
-			goto error;
-#ifdef SHELL
-		case 4: // busybox sh
-			shell(envp);
-			goto menu_prompt;
-#endif
-		default: // parsed config
-			if ((i==-1) && (!def_entry))
-			{
-				WARN("no default entry found, please make a choice");
-				goto error;
-			}
-			else
-				item=get_item_by_id(list,i);
-			if(!item)
+		case MENU_DEFAULT_NUM:
+			if(!have_default)
 			{
 				WARN("invalid choice\n");
 				goto error;
 			}
-			if(wait_for_device(item->blkdev))
-			{
-				ERROR("device \"%s\" not found\n",item->blkdev);
-				goto error;
-			}
-			// mount blkdev on NEWROOT
-			if(mount(item->blkdev,NEWROOT,"ext4",0,""))
-			{
-				ERROR("unable to mount \"%s\" on %s - %s\n",item->blkdev,NEWROOT,strerror(errno));
-				goto error;
-			}
-			
-			// we made it, time to clean up and chroot
-			DEBUG("mounted \"%s\" on \"%s\"\n",item->blkdev,NEWROOT);
-			INFO("booting \"%s\"\n",item->name);
-
-			// store args locally
-			kernel = item->kernel;
-			initrd = item->initrd;
-			cmdline = item->cmdline;
-			// set to NULL to avoid free() from free_menu()
-			item->initrd = item->kernel = item->cmdline = NULL;
-
-			free_menu(list);
-			if(def_entry!=NULL)
-			{
-				def_entry->name = NULL;
-				free_entry(def_entry);
-			}
-			if(!fork())
-			{
-				kexec(kernel,initrd,cmdline); // reboot into the new kernel
-				exit(-1);
-			}
-			wait(NULL); // should not return on success
-			take_console_control();
-			FATAL("failed to kexec\n"); // we cannot go back, already freed everything...
+			item=def_entry;
+			break;
+		case MENU_REBOOT_NUM:
+			init_reboot(RB_AUTOBOOT);
+			goto error;
+		case MENU_HALT_NUM:
+			init_reboot(RB_HALT_SYSTEM);
+			goto error;
+		case MENU_RECOVERY_NUM:
+			reboot_recovery();
+			goto error;
+#ifdef SHELL
+		case MENU_SHELL_NUM:
+			shell();
+			goto menu_prompt;
+#endif
+		default: // parsed config
+			item=get_item_by_id(list,i);
+	}
+	if(!item)
+	{
+		WARN("invalid choice\n");
+		goto error;
+	}
+	if(wait_for_device(item->blkdev))
+	{
+		ERROR("device \"%s\" not found\n",item->blkdev);
+		goto error;
+	}
+	// mount blkdev on NEWROOT
+	if(mount(item->blkdev,NEWROOT,"ext4",0,""))
+	{
+		ERROR("unable to mount \"%s\" on %s - %s\n",item->blkdev,NEWROOT,strerror(errno));
+		goto error;
+	}
+	if(k_load(kernel,initrd,cmdline))
+	{
+		ERROR("unable to load guest kernel\n");
+		goto error;
 	}
 
+	// we made it, time to clean up and kexec
+	DEBUG("mounted \"%s\" on \"%s\"\n",item->blkdev,NEWROOT);
+	INFO("booting \"%s\"\n",item->name);
+
+	// store args locally
+	kernel = item->kernel;
+	initrd = item->initrd;
+	cmdline = item->cmdline;
+	// set to NULL to avoid free() from free_menu()
+	item->initrd = item->kernel = item->cmdline = NULL;
+
+	free_menu(list);
+	if(have_default)
+	{
+		free_entry(def_entry);
+		free(*def_entry);
+	}
+	if(!fork())
+	{
+		k_exec(); // bye bye
+		exit(EXIT_FAILURE);
+	}
+	wait(NULL); // should not return on success
+	take_console_control();
+	FATAL("failed to kexec\n"); // we cannot go back, already freed everything...
+	FATAL("this is horrible!\n");
+	FATAL("please provide a full bug report to developers\n");
+	press_enter();
+	exit(EXIT_FAILURE); // kernel panic here
+
 error:
-	press_enter(); // TODO: no need to pause for android
+	press_enter();
 	if(!fatal_error)
 		goto menu_prompt;
 	free_menu(list);
-	if(def_entry)
+	if(have_default)
 	{
-		def_entry->name = NULL;
 		free_entry(def_entry);
+		free(def_entry);
 	}
 	umount("/proc");
-android:
 	fatal(argv,envp);
 	exit(EXIT_FAILURE);
 }
