@@ -5,21 +5,13 @@
 CC=arm-unknown-linux-gnueabi-gcc
 LD=arm-unknown-linux-gnueabi-ld
 CFLAGS=-Wall -Werror -g -static
-LDFLAGS= -llzma -lz
+LDFLAGS=-lz
 TARGET_BIN=root_chooser
 
-all: v6
+all: v4
 
-# placeholder for "guest" init
-
-v6: root_chooser6.c menu2.o lzma.o zlib.o sha256.o kexec.o
+v4: root_chooser4.c loop_mount2.o initrd_mount.o  zlib.o
 	$(CC) $(CFLAGS) -o $(TARGET_BIN) $? $(LDFLAGS)
-
-v5: root_chooser5.c loop_mount2.o menu.o
-	$(CC) $(CFLAGS) -o $(TARGET_BIN) $?
-
-v4: root_chooser4.c loop_mount4.o
-	$(CC) $(CFLAGS) -o $(TARGET_BIN) $?
 
 v3: root_chooser3.c loop_mount.o
 	$(CC) $(CFLAGS) -o $(TARGET_BIN) $?
