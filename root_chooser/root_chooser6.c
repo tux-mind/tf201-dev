@@ -482,61 +482,40 @@ int wait_for_keypress(void)
 
 int get_user_choice(void)
 {
-	int i,stat;
+	int i;
 	char buff[MAX_LINE];
-	pid_t pid;
 
 	printf("enter a number and press <ENTER>: ");
-	fflush(stdout);
 
-	if(!(pid = fork()))
+	fgets(buff,MAX_LINE,stdin);
+	fgets_fix(buff);
+	for(i=0;i<MAX_LINE && buff[i] != '\0' && isspace(buff[i]);i++);
+	switch(buff[i])
 	{
-		take_console_control();
-		fgets(buff,MAX_LINE,stdin);
-		fgets_fix(buff);
-		for(i=0;i<MAX_LINE && buff[i] != '\0' && isspace(buff[i]);i++);
-		DEBUG("child read \"%s\" [%d]\n",buff,i);
-		switch(buff[i])
-		{
-			case MENU_ANDROID:
-				i = MENU_ANDROID_NUM;
-				break;
-			case MENU_DEFAULT:
-				i = MENU_DEFAULT_NUM;
-				break;
-			case MENU_REBOOT:
-				i = MENU_REBOOT_NUM;
-				break;
-			case MENU_HALT:
-				i=MENU_HALT_NUM;
-				break;
-			case MENU_RECOVERY:
-				i=MENU_RECOVERY_NUM;
-				break;
+		case MENU_ANDROID:
+			i = MENU_ANDROID_NUM;
+			break;
+		case MENU_DEFAULT:
+			i = MENU_DEFAULT_NUM;
+			break;
+		case MENU_REBOOT:
+			i = MENU_REBOOT_NUM;
+			break;
+		case MENU_HALT:
+			i=MENU_HALT_NUM;
+			break;
+		case MENU_RECOVERY:
+			i=MENU_RECOVERY_NUM;
+			break;
 #ifdef SHELL
-			case MENU_SHELL:
-				i=MENU_SHELL_NUM;
-				break;
+		case MENU_SHELL:
+			i=MENU_SHELL_NUM;
+			break;
 #endif
-			default:
-				DEBUG("not special");
-				i = atoi(buff);
-		}
-		exit(i);
-		return 0; /* not reached */
+		default:
+			i = atoi(buff);
 	}
-	if (pid < 0)
-	{
-		FATAL("cannot fork - %s\n",strerror(errno));
-		return 0;
-	}
-	else
-	{
-		waitpid(pid,&stat,0);
-		take_console_control();
-		stat = WEXITSTATUS(stat);
-		return stat;
-	}
+	return i;
 }
 
 int parse_data_directory(menu_entry **list)
