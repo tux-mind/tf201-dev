@@ -150,10 +150,13 @@ int read_our_cmdline(char *dest)
 	for(fd=0;fd<len;fd++)
 		if(dest[fd]=='\n')
 		{
+			dest[fd]='\0';
 			len = fd;
 			break;
 		}
-	return len;
+	DEBUG("readed cmdline \"%s\"\n",dest);
+	DEBUG("and it's long %d bytes\n",len);
+	return len*sizeof(char);
 }
 
 /* if cmdline is NULL or his lenght is 0 => use our cmdline
@@ -564,7 +567,12 @@ int main(int argc, char **argv, char **envp)
 		def_entry->name = NULL;
 		free_entry(def_entry);
 	}
-	kexec(kernel,initrd,cmdline);
+	if(!fork())
+	{
+		kexec(kernel,initrd,cmdline);
+		exit(-1);
+	}
+	wait(NULL);
 
 	error:
 	press_enter();
