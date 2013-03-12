@@ -154,8 +154,6 @@ int read_our_cmdline(char *dest)
 			len = fd;
 			break;
 		}
-	DEBUG("readed cmdline \"%s\"\n",dest);
-	DEBUG("and it's long %d bytes\n",len);
 	return len*sizeof(char);
 }
 
@@ -194,7 +192,7 @@ int cmdline_parser(char *line, char **cmdline)
 		line = NULL;
 	}
 
-	*cmdline = malloc((len+1)*sizeof(char));
+	*cmdline = malloc((len+2)*sizeof(char));
 	if(!cmdline)
 	{
 		FATAL("malloc - %s\n",strerror(errno));
@@ -209,7 +207,8 @@ int cmdline_parser(char *line, char **cmdline)
 	// use the given one
 	else
 		strncpy(*cmdline,line,len);
-	*(*cmdline +len) = '\0';
+	*(*cmdline +len) = '\n';
+	*(*cmdline +len+1) = '\0';
 	return 0;
 }
 
@@ -316,6 +315,7 @@ int get_user_choice()
 	{
 		take_console_control();
 		fgets(buff,MAX_LINE,stdin);
+		fgets_fix(buff);
 		DEBUG("child read \"%s\"\n",buff);
 		i = atoi(buff);
 		exit(i);
@@ -573,7 +573,8 @@ int main(int argc, char **argv, char **envp)
 		exit(-1);
 	}
 	wait(NULL);
-
+	take_console_control();
+	FATAL("failed to kexec\n"); // we cannot go back, already freed everything...
 	error:
 	press_enter();
 	if(!fatal_error)
