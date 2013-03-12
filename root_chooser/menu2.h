@@ -1,12 +1,23 @@
 #ifndef _MENU_H
 #define _MENU_H
 
-#include "common.h"
+// characters for special entries
+#define MENU_DEFAULT	'd'
+#define MENU_REBOOT		'r'
+#define MENU_HALT			's'
+#define MENU_RECOVERY	'R'
+#define MENU_SHELL		'#'
+/* our functions return integers
+ * i known that a char it's an int value,
+ * but user can have an entry ID which have the same value of a char.
+ * so i decided to use negative numbers for special entries.
+ */
+#define MENU_DEFAULT_NUM 	-1
+#define MENU_REBOOT_NUM		-2
+#define MENU_HALT_NUM 		-3
+#define MENU_RECOVERY_NUM	-4
+#define MENU_SHELL_NUM		-5
 
-// allow the user to drop into a shell provided by busybox
-#ifdef DEVELOPMENT
- #define SHELL
-#endif
 
 typedef struct _menu_entry
 {
