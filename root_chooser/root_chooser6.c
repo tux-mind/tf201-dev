@@ -1,4 +1,4 @@
-#include "root_chooser5.h"
+#include "root_chooser6.h"
 
 // if == 1 => someone called FATAL we have to exit
 int fatal_error;
@@ -16,41 +16,40 @@ void fatal(char **argv,char **envp)
 }
 
 /* make /dev from /sys */
-void mdev(char **envp)
+void mdev()
 {
 	pid_t pid;
 	if(!(pid = fork()))
 	{
 		char *mdev_argv[] = MDEV_ARGS;
-		execve(BUSYBOX,mdev_argv,envp);
+		execv(BUSYBOX,mdev_argv);
 	}
 	waitpid(pid,NULL,0);
 }
 
 /* substitute '\n' with '\0' */
-void fgets_fix(char *string)
+char *fgets_fix(char *string)
 {
 	char *pos;
+
+	if(!string)
+		return NULL;
 	for(pos=string;*pos!='\n'&&*pos!='\0';pos++);
 	*pos='\0';
+	return string;
 }
 
-/* parse line as "blkdev:kernel:root_directory:init_path init_args"
+/* parse line as "blkdev:kernel:initrd"
  * returned values are:
  *	0 if ok
  *	1 if a malloc error occourred or
  *		if a parse error occourred.
  * 	if an error occour errno it's set to the corresponding error number.
  */
-int parser(char *line,char **blkdev, char**kernel, char **root, char ***init_args)
+int parser(char *line,char **blkdev, char**kernel, char **initrd)
 {
 	register char *pos;
-	char *args_pool[INIT_MAX_ARGS+1];
 	register int i;
-	int j;
-
-	// init args_pool ( will free anything != 0 if an error occours )
-	memset(args_pool,'\0',(INIT_MAX_ARGS+1)*sizeof(char*));
 
 	// count args length
 	for(i=0,pos=line;*pos!=':'&&*pos!='\0';pos++)
@@ -59,12 +58,16 @@ int parser(char *line,char **blkdev, char**kernel, char **root, char ***init_arg
 	if(!i)
 	{
 		errno = EINVAL;
+		ERROR("missing block device\n");
 		return 1;
 	}
 	// allocate memory dynamically ( i love this things <3 )
 	*blkdev = malloc((i+1)*sizeof(char));
 	if(!*blkdev)
+	{
+		FATAL("malloc - %s\n",strerror(errno));
 		return -1;
+	}
 	// copy string
 	strncpy(*blkdev,line,i);
 	*(*blkdev+i) = '\0';
@@ -80,105 +83,45 @@ int parser(char *line,char **blkdev, char**kernel, char **root, char ***init_arg
 	{
 		free(*blkdev);
 		errno = EINVAL;
+		ERROR("missing kernel\n");
 		return 1;
 	}
-	*kernel = malloc((i+1)*sizeof(char));
+	*kernel = malloc((i+NEWROOT_STRLEN+1)*sizeof(char));
 	if(!*kernel)
 	{
 		free(*blkdev);
+		FATAL("malloc - %s\n",strerror(errno));
 		return 1;
 	}
-	strncpy(*kernel,pos-i,i);
-	*(*kernel +i) = '\0';
+	strncpy(*kernel,NEWROOT,NEWROOT_STRLEN);
+	strncpy(*kernel+NEWROOT_STRLEN,pos - i,i);
+	*(*kernel + NEWROOT_STRLEN+i) = '\0';
 	// skip trailing '/'
 	if(*pos=='/')
 		pos++;
 	for(i=0;*pos!=':'&&*pos!='\0';pos++)
 		i++;
-	if(!i && *(pos-1) != '/')
+	if(i)
 	{
-		free(*blkdev);
-		free(*kernel);
-		errno = EINVAL;
-		return 1;
-	}
-	*root = malloc((i+NEWROOT_STRLEN+1)*sizeof(char));
-	if(!*root)
-	{
-		free(*blkdev);
-		free(*kernel);
-		return 1;
-	}
-	// copy NEWROOT to root
-	strncpy(*root,NEWROOT,NEWROOT_STRLEN);
-	// append user root_directory to NEWROOT
-	strncpy(*root+NEWROOT_STRLEN,pos - i,i);
-	*(*root + NEWROOT_STRLEN+i) = '\0';
-	if(*pos==':')
-		pos++;
-	// count how many args we need while store them
-	for(j=0;j<INIT_MAX_ARGS && *pos != '\0';)
-	{
-		while(*pos==' ')
-			pos++;
-		for(i=0;*pos!='\0'&&*pos!=' ';pos++)
-			i++;
-		if(i) // this will fail if line terminates with space.
+		*initrd = malloc((i+NEWROOT_STRLEN+1)*sizeof(char));
+		if(!*initrd)
 		{
-			args_pool[j] = malloc((i+1)*sizeof(char));
-			if(args_pool[j])
-			{
-				strncpy(args_pool[j],pos - i,i);
-				args_pool[j][i]='\0';
-				j++; // increase args counter only if we have created one.
-			}
-			else // it's useless going on....exit now!
-			{
-				//free() don't change errno if called with a valid pointer.
-				free(*blkdev);
-				free(*kernel);
-				free(*root);
-				// free any allocated arg
-				for(j=0;j<INIT_MAX_ARGS+1;j++)
-					if(args_pool[j])
-						free(args_pool[j]);
-				return 1;
-			}
+			free(*blkdev);
+			free(*kernel);
+			FATAL("malloc - %s\n",strerror(errno));
+			return 1;
 		}
+		// append readed value to NEWROOT
+		strncpy(*initrd,NEWROOT,NEWROOT_STRLEN);
+		strncpy(*initrd+NEWROOT_STRLEN,pos - i,i);
+		*(*initrd + NEWROOT_STRLEN+i) = '\0';
 	}
-	if(!j)
-	{
-		free(*blkdev);
-		free(*kernel);
-		free(*root);
-		// free any allocated arg
-		for(j=0;j<INIT_MAX_ARGS+1;j++)
-			if(args_pool[j])
-				free(args_pool[j]);
-		errno=EINVAL;
-		return 1;
-	}
-
-	*init_args = malloc((j+1)*sizeof(char*));
-	if(!*init_args)
-	{
-		// yeah, i'm really paranoid about error checking ;)
-		free(*blkdev);
-		free(*kernel);
-		free(*root);
-		for(j=0;j<INIT_MAX_ARGS+1;j++)
-			if(args_pool[j])
-				free(args_pool[j]);
-		return 1;
-	}
-	// copy args from args_pool to init_args
-	for(i=0;i<j;i++)
-		*(*init_args+i) = args_pool[i];
-	*(*init_args+i) = NULL;
+	else
+		*initrd=NULL;
 	return 0; // all ok
 }
 
-/* read current cmdline from proc 
+/* read current cmdline from proc
  * return the size of the readed command line.
  * if an error occours 0 is returned.
  * WARN: dest MUST be at least COMMAND_LINE_SIZE long
@@ -210,7 +153,7 @@ int read_our_cmdline(char *dest)
  */
 int cmdline_parser(char *line, char **cmdline)
 {
-	int fd,len;
+	int len;
 	static char our_cmdline[COMMAND_LINE_SIZE];
 	static int our_cmdline_len=0;
 
@@ -228,7 +171,7 @@ int cmdline_parser(char *line, char **cmdline)
 			len += our_cmdline_len +1; // one more for the ' '
 		if(len > COMMAND_LINE_SIZE)
 		{
-			WARN("command line too long\n");
+			ERROR("command line too long\n");
 			WARN("the current one will be used\n");
 			line = NULL;
 		}
@@ -238,7 +181,7 @@ int cmdline_parser(char *line, char **cmdline)
 		len = our_cmdline_len;
 		line = NULL;
 	}
-		
+
 	*cmdline = malloc((len+1)*sizeof(char));
 	if(!cmdline)
 	{
@@ -255,7 +198,9 @@ int cmdline_parser(char *line, char **cmdline)
 	else
 		strncpy(*cmdline,line,len);
 	*(*cmdline +len) = '\0';
+	return 0;
 }
+
 /** open console for the first time
  * NOTE: we need /sys mounted
  */
@@ -360,7 +305,7 @@ int get_user_choice()
 		take_console_control();
 		fgets(buff,MAX_LINE,stdin);
 		DEBUG("child read \"%s\"\n",buff);
-		sscanf(buff,"%d",&i);
+		i = atoi(buff);
 		exit(i);
 		return 0; /* not reahced */
 	}
@@ -371,7 +316,7 @@ int parse_data_directory(menu_entry **list)
 	DIR *dir;
 	struct dirent *d;
 	FILE *file;
-	char line[MAX_LINE],*blkdev,*kernel,*root,**init_args,*path;
+	char line[MAX_LINE],*blkdev,*kernel,*cmdline,*initrd,*path;
 	int len;
 
 	if((dir = opendir(DATA_DIR)) == NULL)
@@ -399,6 +344,15 @@ int parse_data_directory(menu_entry **list)
 				return -1;
 			}
 			free(path);
+			// check that there is a description, but copy it later
+			if((fgets(line,MAX_LINE,file)) == NULL)
+			{
+				ERROR("no description found\n");
+				ERROR("reading %s%s - %s\n",DATA_DIR,d->d_name,strerror(errno));
+				fclose(file);
+				closedir(dir);
+				return -1;
+			}
 			if((fgets(line,MAX_LINE,file)) == NULL)
 			{
 				ERROR("reading %s%s - %s\n",DATA_DIR,d->d_name,strerror(errno));
@@ -407,20 +361,26 @@ int parse_data_directory(menu_entry **list)
 				return -1;
 			}
 			fgets_fix(line);
-			if(parser(line,&blkdev,&kernel,&root,&init_args))
+			if(parser(line,&blkdev,&kernel,&initrd) || cmdline_parser(fgets_fix(fgets(line,MAX_LINE,file)),&(cmdline)))
 			{
 				fclose(file);
+				if(fatal_error)
+				{
+					closedir(dir);
+					return -1;
+				}
 				WARN("parsing %s%s - %s\n",DATA_DIR,d->d_name,strerror(errno));
 				press_enter();
 				continue;
 			}
+			rewind(file);
 			if(fgets(line,MAX_LINE,file) == NULL || strlen(line) == 0) // no name provided
-				*list = add_entry(*list,d->d_name,blkdev,kernel,root,init_args);
+				*list = add_entry(*list,d->d_name,blkdev,kernel,cmdline,initrd);
 			else
 			{
 				fgets_fix(line);
 				DEBUG("description: %s\n",line);
-				*list = add_entry(*list,line,blkdev,kernel,root,init_args);
+				*list = add_entry(*list,line,blkdev,kernel,cmdline,initrd);
 			}
 			fclose(file);
 		}
@@ -449,22 +409,65 @@ int wait_for_device(char *blkdev)
 	return 0;
 }
 
+int check_for_default_config(menu_entry **def_entry)
+{
+	FILE *fin;
+	char buff[MAX_LINE];
+
+	*def_entry = NULL;
+	if((fin=fopen(ROOT_FILE,"r")))
+	{
+		if((*def_entry = malloc(sizeof(menu_entry))))
+		{
+			if(fgets(buff,MAX_LINE,fin) && fgets(buff,MAX_LINE,fin)) // read the second line
+			{
+				fgets_fix(buff);
+				if (
+					!parser(buff,&((*def_entry)->blkdev),&((*def_entry)->kernel),&((*def_entry)->initrd)) &&
+					!cmdline_parser(fgets_fix(fgets(buff,MAX_LINE,fin)),&((*def_entry)->cmdline))
+				)
+				{
+					(*def_entry)->name = "default";
+					DEBUG("have a default entry\n");
+				}
+				else
+				{
+					free(*def_entry);
+					*def_entry = NULL;
+					if(fatal_error)
+						return -1;
+				}
+			}
+			else
+			{
+				free(*def_entry);
+				*def_entry = NULL;
+			}
+		}
+		else
+		{
+			FATAL("malloc - %s\n",strerror(errno));
+			return -1;
+		}
+		fclose(fin);
+	}
+	return 0;
+}
+
 int main(int argc, char **argv, char **envp)
 {
 	int i;
 	menu_entry *list=NULL,*item,*def_entry=NULL;
-	char *init_abs_path,**final_init_args,buff[MAX_LINE];
-	int mounted_twice;
-	FILE *fin;
-	
-	// errors before open_console are fatal
+	char *kernel,*initrd,*cmdline;
+
+	// errors before open_console are fatals
 	fatal_error = 1;
 
 	//mount sys
 	if(mount("sysfs","/sys","sysfs",MS_RELATIME,""))
 		goto error;
 	//open the console ( this is required from version 5 )
-	if(open_console(envp))
+	if(open_console())
 	{
 		umount("/sys");
 		goto error;
@@ -473,6 +476,11 @@ int main(int argc, char **argv, char **envp)
 	fatal_error=printed_lines=0;
 	umount("/sys");
 	printf(HEADER);
+	if(mount("proc","/proc","proc",MS_RELATIME,""))
+	{
+		FATAL("cannot mount proc\n");
+		goto error;
+	}
 	INFO("mounting /data\n");
 	//mount DATA_DEV partition into /data
 	if(mount(DATA_DEV,"/data","ext4",0,""))
@@ -481,38 +489,8 @@ int main(int argc, char **argv, char **envp)
 		goto error;
 	}
 	// check for a default entry
-	def_entry = NULL;
-	if((fin=fopen(ROOT_FILE,"r")))
-	{
-		if((def_entry = malloc(sizeof(menu_entry))))
-		{
-			if(fgets(buff,MAX_LINE,fin))
-			{
-				fgets_fix(buff);
-				if(!parser(buff,&(def_entry->blkdev),&(def_entry->kernel),&(def_entry->root),&(def_entry->init_argv)))
-				{
-					def_entry->name = "default";
-					DEBUG("have a default entry\n");
-				}
-				else
-				{
-					free(def_entry);
-					def_entry = NULL;
-				}
-			}
-			else
-			{
-				free(def_entry);
-				def_entry = NULL;
-			}
-		}
-		else
-		{
-			FATAL("malloc - %s\n",strerror(errno));
-			goto error;
-		}
-		fclose(fin);
-	}
+	if(check_for_default_config(&def_entry))
+		goto error;
 	DEBUG("parsing %s\n",DATA_DIR);
 	if(parse_data_directory(&list))
 	{
@@ -532,7 +510,7 @@ int main(int argc, char **argv, char **envp)
 	if(i==0)
 	{
 		INFO("booting android\n");
-		fatal_error = 1; // force fatal() call 
+		fatal_error = 1; // force fatal() call
 		goto error;
 	}
 	else if(i==-1)
@@ -553,7 +531,7 @@ int main(int argc, char **argv, char **envp)
 	}
 	if(wait_for_device(item->blkdev))
 	{
-		ERROR("device \"%s\" not found\n",blkdev);
+		ERROR("device \"%s\" not found\n",item->blkdev);
 		goto error;
 	}
 	//mount blkdev on NEWROOT
@@ -563,59 +541,23 @@ int main(int argc, char **argv, char **envp)
 		goto error;
 	}
 	DEBUG("mounted \"%s\" on \"%s\"\n",item->blkdev,NEWROOT);
-	mounted_twice = 0;
-	init_abs_path = item->root; // thus to have a trace of the old pointer
-	//if root is an ext dd image or and initrd file mount it on NEWROOT
-	if(try_loop_mount(&(item->root),NEWROOT) || try_initrd_mount(&(item->root),NEWROOT))
-	{
-		umount(NEWROOT);
-		goto error;
-	}
-	if(item->root != init_abs_path)
-		mounted_twice=1;
-	//check for init existence
-	i=strlen(item->root) + strlen((item->init_argv)[0]);
-	if(!(init_abs_path=malloc((i+1)*sizeof(char))))
-	{
-		umount(NEWROOT);
-		if(mounted_twice)
-			umount(NEWROOT);
-		FATAL("malloc - %s\n");
-		goto error;
-	}
-	strncpy(init_abs_path,item->root,i);
-	strncat(init_abs_path,(item->init_argv)[0],i);
-	init_abs_path[i]='\0';
-	if(access(init_abs_path,R_OK|X_OK))
-	{
-		ERROR("cannot execute \"%s\" - %s\n",init_abs_path,strerror(errno));
-		free(init_abs_path);
-		umount(NEWROOT);
-		if(mounted_twice)
-			umount(NEWROOT);
-		goto error;
-	}
-	free(init_abs_path);
-	final_init_args = item->init_argv;
-	//chroot
-	if(chdir(item->root) || chroot(item->root))
-	{
-		ERROR("cannot chroot/chdir to \"%s\" - \"%s\"",item->root,strerror(errno));
-		umount(NEWROOT);
-		if(mounted_twice)
-			umount(NEWROOT);
-		goto error;
-	}
 	INFO("booting \"%s\"\n",item->name);
-	item->init_argv=NULL;
+
+	//store args locally
+	kernel = item->kernel;
+	initrd = item->initrd;
+	cmdline = item->cmdline;
+	// set to NULL to avoid free() from free_menu()
+	item->initrd = item->kernel = item->cmdline = NULL;
+
 	free_menu(list);
 	if(def_entry!=NULL)
 	{
 		def_entry->name = NULL;
 		free_entry(def_entry);
 	}
-	execve(final_init_args[0],final_init_args,envp);
-	
+	kexec(kernel,initrd,cmdline);
+
 	error:
 	press_enter();
 	if(!fatal_error)
@@ -626,6 +568,7 @@ int main(int argc, char **argv, char **envp)
 		def_entry->name = NULL;
 		free_entry(def_entry);
 	}
+	umount("/proc");
 	fatal(argv,envp);
 	exit(EXIT_FAILURE);
 }

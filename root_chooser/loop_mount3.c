@@ -50,7 +50,7 @@
 int set_loop(const char *device, char *file,int *fd_to_close)
 {
 	struct loop_info64 loopinfo64;
-	int fd, ffd, i;
+	int fd, ffd;
 
 	if ((ffd = open(file, O_RDWR)) < 0)
 	{
@@ -85,7 +85,7 @@ int set_loop(const char *device, char *file,int *fd_to_close)
 	{
 		ERROR("ioctl: LOOP_SET_STATUS64 - %s\n",strerror(errno));
 		ioctl (fd, LOOP_CLR_FD, 0);
-		close (fd);		
+		close (fd);
 		return 1;
 	}
 	*fd_to_close = fd;
@@ -118,7 +118,7 @@ int try_loop_mount(char **loopfile, const char *mountpoint)
 
 	if(stat(*loopfile, &st))
 	{
-		ERROR("cannot stat \"%s\" - %s\n",loopfile,strerror(errno));
+		ERROR("cannot stat \"%s\" - %s\n",*loopfile,strerror(errno));
 		return 1;
 	}
 

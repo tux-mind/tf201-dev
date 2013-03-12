@@ -287,10 +287,6 @@ struct sha256_region {
 #define KEXEC_ARCH_ARM     (40 << 16)
 #define KEXEC_FLAGS (KEXEC_ARCH_ARM | KEXEC_HARDBOOT )
 
-#define KEXEC_FLAGS ((40 << 16) | 4)
-
-#define COMMAND_LINE_SIZE    1024
-
 /*
  * Operating System Codes
  */
