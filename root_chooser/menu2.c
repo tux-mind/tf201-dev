@@ -4,28 +4,22 @@
 #include <sys/types.h>
 #include <string.h>
 
-#include "menu.h"
+#include "menu2.h"
 
 int printed_lines;
 
 void free_entry(menu_entry *item)
 {
-	char **argv;
-
 	if(item->name)
 		free(item->name);
 	if(item->blkdev)
 		free(item->blkdev);
 	if(item->kernel)
 		free(item->kernel);
-	if(item->root)
-		free(item->root);
-	if(item->init_argv)
-	{
-		for(argv=item->init_argv;*argv;argv++)
-			free(*argv);
-		free(item->init_argv);
-	}
+	if(item->cmdline)
+		free(item->cmdline);
+	if(item->initrd)
+		free(item->initrd);
 	free(item);
 }
 
@@ -36,7 +30,7 @@ void free_menu(menu_entry *list)
 		free_entry(current);
 }
 
-menu_entry *add_entry(menu_entry *list, char *_name, char *_blkdev,char *_kernel, char *_root, char **_init_argv)
+menu_entry *add_entry(menu_entry *list, char *_name, char *_blkdev,char *_kernel, char *_cmdline, char *_initrd)
 {
 	menu_entry *item;
 	static unsigned short id = 1;
@@ -69,8 +63,8 @@ menu_entry *add_entry(menu_entry *list, char *_name, char *_blkdev,char *_kernel
 	item->name = name;
 	item->blkdev = _blkdev;
 	item->kernel = _kernel;
-	item->root = _root;
-	item->init_argv = _init_argv;
+	item->cmdline = _cmdline;
+	item->initrd = _initrd;
 	item->next = NULL;
 	return list;
 }

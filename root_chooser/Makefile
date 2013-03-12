@@ -6,7 +6,7 @@ TARGET_BIN=root_chooser
 
 all: v6
 
-v6: root_chooser6.c loop_mount2.o menu2.o lzma.o zlib.o sha256.o kexec.o
+v6: root_chooser6.c menu2.o lzma.o zlib.o sha256.o kexec.o
 	$(CC) $(CFLAGS) -o $(TARGET_BIN) $? $(LDFLAGS)
 
 v5: root_chooser5.c loop_mount2.o menu.o

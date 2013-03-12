@@ -11,6 +11,7 @@
 #endif
 
 #define MAX_LINE 255
+#define COMMAND_LINE_SIZE    1024
 
 extern int printed_lines;
 extern int fatal_error;

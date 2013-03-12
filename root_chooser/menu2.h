@@ -5,17 +5,17 @@ typedef struct _menu_entry
 {
 	unsigned int id;
 	char 	*name,
-				*kernel,
 				*blkdev,
-				*root,
-				**init_argv;
+				*kernel,
+				*cmdline,
+				*initrd;
 	struct _menu_entry *next;
 } menu_entry;
 
 void free_entry(menu_entry *);
 void free_menu(menu_entry *);
 void print_menu(menu_entry *);
-menu_entry *add_entry(menu_entry *, char *, char *, char *, char **);
+menu_entry *add_entry(menu_entry *, char *, char *,char *, char *, char *);
 menu_entry *del_entry(menu_entry *, menu_entry *);
 menu_entry *get_item_by_id(menu_entry *, int);
 #endif

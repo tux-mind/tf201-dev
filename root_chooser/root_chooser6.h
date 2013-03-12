@@ -49,6 +49,7 @@
 #include <dirent.h>
 
 #include "common.h"
+#include "menu2.h"
 
 #define NEWROOT "/newroot/"
 #define NEWROOT_STRLEN 9
@@ -81,6 +82,6 @@
 								"Open Source rocks! - tux_mind <massimo.dragano@gmail.com>\n\n"
 
 //from loop_mount4.c
-int try_loop_mount(char **, const char *);
-//from menu.c
-extern int printed_lines;
+//int try_loop_mount(char **, const char *);
+//from kexec.c
+int kexec(char *, char *, char *);
