@@ -91,7 +91,7 @@ void print_menu(menu_entry *list)
 {
 	menu_entry *current;
 	// clear screen
-	while(printed_lines--)
+	for(;printed_lines;printed_lines--)
 		printf("\033[A\033[2K"); // go UP and CLEAR line ( see VT100 reference )
 	rewind(stdout);
 	ftruncate(1,0);
@@ -112,7 +112,7 @@ void print_menu(menu_entry *list)
 
 void clear_screen(void)
 {
-	while(printed_lines--)
+	for(;printed_lines;printed_lines--)
 		printf("\033[A\033[2K"); // see print_menu for info
 	rewind(stdout);
 	ftruncate(1,0);

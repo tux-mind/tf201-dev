@@ -405,7 +405,8 @@ int open_console(void)
 	return 0;
 }
 
-char getch() {
+char getch()
+{
         char buf = 0;
         struct termios old = {0};
         if (tcgetattr(0, &old) < 0)
@@ -462,6 +463,7 @@ int wait_for_keypress(void)
 			stat = MENU_DEFAULT_NUM; // no keypress
 		else
 			stat = WEXITSTATUS(stat);
+		printf("\r\033[2K");
 		return stat;
 	}
 	else if(pid < 0)
@@ -493,6 +495,7 @@ int get_user_choice(void)
 		fgets(buff,MAX_LINE,stdin);
 		fgets_fix(buff);
 		for(i=0;i<MAX_LINE && buff[i] != '\0' && isspace(buff[i]);i++);
+		DEBUG("child read \"%s\" [%d]\n",buff,i);
 		switch(buff[i])
 		{
 			case MENU_ANDROID:
@@ -516,6 +519,7 @@ int get_user_choice(void)
 				break;
 #endif
 			default:
+				DEBUG("not special");
 				i = atoi(buff);
 		}
 		exit(i);
@@ -683,11 +687,14 @@ int main(int argc, char **argv, char **envp)
 	// now we have all data. ( NOTE: i contains the pressed key if needed )
 
 	/* we restart from here in case of not fatal errors */
+#ifdef STOP_BEFORE_MENU
+	press_enter();
+#endif
 menu_prompt:
 	print_menu(list);
 	i=get_user_choice();
-	DEBUG("user chose %d\n",i);
 skip_menu:
+	DEBUG("user chose %d\n",i);
 	// decide what to do
 	switch (i)
 	{
@@ -698,6 +705,7 @@ skip_menu:
 		case MENU_DEFAULT_NUM:
 			if(!have_default)
 			{
+				DEBUG("want to boot default but no one has been found\n");
 				WARN("invalid choice\n");
 				goto error;
 			}
