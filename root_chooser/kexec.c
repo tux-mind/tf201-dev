@@ -1537,7 +1537,7 @@ static inline long kexec_load(void *entry, unsigned long nr_segments,
 	return (long) syscall(__NR_kexec_load, entry, nr_segments, segments, flags);
 }
 
-static int k_load(char *kernel,char *initrd,char *cmdline)
+int k_load(char *kernel,char *initrd,char *cmdline)
 {
 	char *kernel_buf;
 	off_t kernel_size;
@@ -1549,6 +1549,9 @@ static int k_load(char *kernel,char *initrd,char *cmdline)
 	info.nr_segments = 0;
 	info.backup_start = 0;
 	info.kexec_flags = KEXEC_FLAGS;
+
+	mem_max = ULONG_MAX;
+	mem_min = 0xA0000000;
 
 	DEBUG("%s\n%s\n%s\n", kernel, initrd, cmdline);
 
@@ -1610,8 +1613,8 @@ static int k_load(char *kernel,char *initrd,char *cmdline)
 		return -1;
 	}
 	result = kexec_load(info.entry, info.nr_segments, info.segment, info.kexec_flags);
-	if (result != 0) { // not used
-		/* The load failed, print some debugging information */
+	if (result != 0)
+	{
 		ERROR("kexec_load failed: %s\n", strerror(errno));
 		DEBUG("entry       = %p flags = %lx\n", info.entry, info.kexec_flags);
 	}
@@ -1620,27 +1623,12 @@ static int k_load(char *kernel,char *initrd,char *cmdline)
 
 static inline long kexec_reboot(void)
 {
-#ifdef DEVELOPMENT
-	press_enter(); // read any last minute information before we reboot
-#endif
 	return (long) syscall(__NR_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_KEXEC, 0);
 }
 
-static int k_exec(void)
+void k_exec(void)
 {
-	int result;
-
-	result = kexec_reboot();
-	/* I have failed if I make it here */
-	ERROR("kexec failed: %s\n", strerror(errno));
-	return result;
-}
-
-int kexec(char *kernel, char *initrd, char *cmdline)
-{
-	mem_max = ULONG_MAX;
-	mem_min = 0xA0000000; //
-	if(!k_load(kernel,initrd,cmdline))
-		return k_exec();
-	return -1;
+	int returned;
+	returned = kexec_reboot();
+	ERROR("syscall failed: returned value = %d - %s\n", returned, strerror(errno));
 }

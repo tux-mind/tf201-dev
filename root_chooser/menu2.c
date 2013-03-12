@@ -30,14 +30,20 @@ void free_menu(menu_entry *list)
 	for(current=list;current;current=current->next)
 		free_entry(current);
 }
-
+/** add an etry in the list
+ * entries have an ID which is univoke for everyone.
+ * this id starts from 1, since we decided that end-users can prefer this.
+ * @list: the main list
+ * @_name: the name pointer.
+ * @_blkdev: the block device pointer.
+ * @_kernel: the kernel path pointer.
+ * @_cmdline: the cmdline pointer.
+ * @_initrd: the initrd pointer.
+ */
 menu_entry *add_entry(menu_entry *list, char *_name, char *_blkdev,char *_kernel, char *_cmdline, char *_initrd)
 {
 	menu_entry *item;
 	static unsigned short id = 1;
-
-	char *name;
-	int len;
 
 	if(!list)
 	{
@@ -52,17 +58,8 @@ menu_entry *add_entry(menu_entry *list, char *_name, char *_blkdev,char *_kernel
 		if(!item)
 			return NULL;
 	}
-
-	len = strlen(_name);
-	name = malloc((len+1)*sizeof(char));
-	if(!name)
-	{
-		free(item);
-		return NULL;
-	}
-	strncpy(name,_name,len);
 	item->id = id++;
-	item->name = name;
+	item->name = _name;
 	item->blkdev = _blkdev;
 	item->kernel = _kernel;
 	item->cmdline = _cmdline;
@@ -92,14 +89,14 @@ menu_entry *del_entry(menu_entry *list, menu_entry *item)
 
 void print_menu(menu_entry *list)
 {
-	int i;
 	menu_entry *current;
 	// clear screen
-	for(i=0;i<printed_lines;i++)
+	while(printed_lines--)
 		printf("\033[A\033[2K"); // go UP and CLEAR line ( see VT100 reference )
 	rewind(stdout);
 	ftruncate(1,0);
 	// print entries
+	printf("%c) boot android\n",MENU_ANDROID);
 	if(have_default)
 		printf("%c) boot the default config\n",MENU_DEFAULT);
 	printf("%c) reboot\n",MENU_REBOOT);
@@ -109,19 +106,16 @@ void print_menu(menu_entry *list)
 	printf("%c) emergency shell\n",MENU_SHELL);
 #endif
 	printf("   ------------------\n");
-	printf("0) boot android\n");
 	for(printed_lines=1,current=list;current;current=current->next,printed_lines++)
 		printf("%u) %s\n",current->id,current->name);
 }
 
-void clear_screen()
+void clear_screen(void)
 {
-	int i;
-	for(i=0;i<printed_lines;i++)
-		printf("\033[A\033[2K"); // go UP and CLEAR line ( see VT100 reference )
+	while(printed_lines--)
+		printf("\033[A\033[2K"); // see print_menu for info
 	rewind(stdout);
 	ftruncate(1,0);
-	printed_lines=0;
 }
 
 menu_entry *get_item_by_id(menu_entry *list, int id)
