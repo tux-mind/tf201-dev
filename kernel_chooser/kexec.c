@@ -464,6 +464,8 @@ int zImage_arm_load(const char *buf, char *command_line, char *ramdisk, off_t le
 	}
 	if (ramdisk) {
 		ramdisk_buf = slurp_file(ramdisk, &ramdisk_length);
+		if(!ramdisk_buf)
+			return -1;
 	}
 
 	base = locate_hole(info,len+offset,0,0,ULONG_MAX,INT_MAX);

@@ -242,9 +242,19 @@ int main(int argc, char **argv, char **envp)
 	line = blkdev = root = NULL;
 	new_argv = NULL;
 	i=mounted_twice=0;
+	
 
 	if((log = fopen(LOG,"w")) != NULL)
 	{
+		#ifdef DEBUG
+		mount("sysfs","/sys","sysfs",MS_RELATIME,"");
+		mdev(envp);
+		mount("/dev/mmcblk0p8","/data","ext4",0,"");
+		umount("/sys");
+		fclose(log);
+		log = fopen("/data/root_chooser.log","w");
+		fprintf(log,"this is a desperate debugging session..\n");
+		#endif
 		// mount /proc
 		if(!mount("proc","/proc","proc",MS_RELATIME,""))
 		{

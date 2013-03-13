@@ -348,6 +348,7 @@ int parser(char *file, char *fallback_name, menu_entry **list, menu_entry **def_
 	(*def_entry)->blkdev 	= blkdev;
 	(*def_entry)->cmdline	= cmdline;
 	(*def_entry)->next = NULL;
+	have_default=1;
 	return 0;
 
 error_with_fclose:
@@ -678,11 +679,10 @@ int main(int argc, char **argv, char **envp)
 	{
 		if(def_entry==NULL) // no default entry, boot android
 			i=MENU_ANDROID_NUM;
-		goto skip_menu; // automatic menu ( no input required )
+		goto skip_menu; // automatic boot ( no input required )
 	}
-	umount("/data");
 
-	// now we have all data. ( NOTE: i contains the pressed key if needed )
+	// now we have all data. ( NOTE: 'i' contains the pressed key if needed )
 
 	/* we restart from here in case of not fatal errors */
 menu_prompt:
@@ -742,8 +742,15 @@ skip_menu:
 	if(k_load(item->kernel,item->initrd,item->cmdline))
 	{
 		ERROR("unable to load guest kernel\n");
+		umount(NEWROOT);
 		goto error;
 	}
+	DEBUG("kernel = \"%s\"\n",item->kernel);
+	DEBUG("initrd = \"%s\"\n",item->initrd);
+	DEBUG("cmdline = \"%s\"\n",item->cmdline);
+	#ifdef DEVELOPMENT
+	press_enter();
+	#endif
 
 	// we made it, time to clean up and kexec
 	DEBUG("mounted \"%s\" on \"%s\"\n",item->blkdev,NEWROOT);
@@ -753,11 +760,9 @@ skip_menu:
 	item->initrd = item->kernel = item->cmdline = NULL;
 
 	free_menu(list);
+	DEBUG("after free_menu()\n");
 	if(have_default)
-	{
 		free_entry(def_entry);
-		free(def_entry);
-	}
 	if(!fork())
 	{
 		k_exec(); // bye bye
