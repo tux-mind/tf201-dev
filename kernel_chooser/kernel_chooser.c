@@ -322,6 +322,8 @@ int parser(char *file, char *fallback_name, menu_entry **list, menu_entry **def_
 		FATAL("malloc - %s\n",strerror(errno));
 		return -1;
 	}
+	strncpy(name,name_line,name_len);
+	*(name+name_len)='\0';
 	if (
 		config_parser(line,&blkdev,&kernel,&initrd) ||
 		cmdline_parser(fgets_fix(fgets(line,MAX_LINE,fin)),&cmdline)
@@ -385,8 +387,16 @@ void take_console_control(void)
 int open_console(void)
 {
 	int i;
+#ifdef DEBUG
+	int fd;
+#endif
 
 	mdev();
+#ifdef DEBUG
+	fd = open("/dev/kmsg",O_WRONLY);
+	write(fd,"kernel_chooser: called open_console\n",35);
+	close(fd);
+#endif
 	if(access(CONSOLE,R_OK|W_OK))
 	{ // no console yet... wait until timeout
 		sleep(1);
@@ -402,6 +412,11 @@ int open_console(void)
 		}
 	}
 	take_console_control();
+#ifdef DEBUG
+	fd = open("/dev/kmsg",O_WRONLY);
+	write(fd,"kernel_chooser: open_console ok\n",32);
+	close(fd);
+#endif
 	return 0;
 }
 
@@ -619,7 +634,7 @@ int main(int argc, char **argv, char **envp)
 	// mount sys
 	if(mount("sysfs","/sys","sysfs",MS_RELATIME,""))
 		goto error;
-	// open the console ( this is required from version 5 )
+	// open the console
 	if(open_console())
 	{
 		umount("/sys");
@@ -653,6 +668,7 @@ int main(int argc, char **argv, char **envp)
 		umount("/data");
 		goto error;
 	}
+	umount("/data");
 #ifdef STOP_BEFORE_MENU
 	press_enter();
 #endif

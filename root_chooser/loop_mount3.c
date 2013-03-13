@@ -36,7 +36,6 @@
 #include <sys/time.h>
 
 #include "loop_mount3.h"
-#include "common.h"
 
 #define MS_LOOP 0x00010000
 

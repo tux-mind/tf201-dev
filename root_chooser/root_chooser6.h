@@ -21,9 +21,12 @@
 #define ROOT_FILE "/data/.root"
 //the name of the temporary file where we read the boot options
 #define ROOT_TMP_FILE "/data/.root.tmp"
+#define COMMAND_LINE_SIZE 1024
 //our option from /proc/cmdline
 #define CMDLINE_OPTION "newroot="
 #define CMDLINE_OPTION_LEN 8
 
 //from loop_mount2.c
 int try_loop_mount(char **, const char *);
+//from initrd_mount.c
+int try_initrd_mount(char **, const char *);

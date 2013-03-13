@@ -1,5 +1,5 @@
-#define NEWROOT "/mnt/"
-#define NEWROOT_STRLEN 5
+#define NEWROOT "/newroot/"
+#define NEWROOT_STRLEN 9
 #define BUSYBOX "/bin/busybox"
 #define TIMEOUT 5 /* time to wait for external block devices ( USB stick ) or console */
 #define TIMEOUT_BOOT 10 /* time to wait for the user to press a key */
