@@ -7,7 +7,9 @@
 #define WARN(x,args...)		do{printf("[WARN ] "x,##args);printed_lines++;}while(0)
 #define INFO(x,args...)		do{printf("[INFO ] "x,##args);printed_lines++;}while(0)
 #ifdef DEVELOPMENT
-#define DEBUG(x,args...) 	do{printf("[DEBUG] "x,##args);printed_lines++;}while(0)
+#define DEBUG(x,args...) 	do{printf("[DEBUG %s ] "x,__func__,##args);printed_lines++;}while(0)
+#undef ERROR
+#define ERROR(x,args...)	do{printf("[ERROR %s ] "x,__func__,##args);printed_lines++;}while(0)
 #define STOP_BEFORE_MENU
 #define SHELL // allow the user to drop into a shell provided by busybox
 #else
