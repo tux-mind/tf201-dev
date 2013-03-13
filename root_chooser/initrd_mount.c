@@ -16,7 +16,7 @@
  * @len: the length of the cpio_buffer
  * @dst: the directory to extract the archive into
  */
-int cpio_copyin(char *cpio_buffer, unsigned long len, char *dst)
+int cpio_copyin(char *cpio_buffer, unsigned long len, const char *dst)
 {
 	pid_t pid;
 	int pipefd[2];
@@ -56,7 +56,7 @@ int cpio_copyin(char *cpio_buffer, unsigned long len, char *dst)
  * @file: path to the initrd file
  * @mountpoint: the directory where we mount to
  */
-int try_initrd_mount(char **file, char *mountpoint)
+int try_initrd_mount(char **file, const char *mountpoint)
 {
 	struct stat st;
 	int fd;

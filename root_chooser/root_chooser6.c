@@ -231,13 +231,12 @@ int parser(char *line,char **blkdev, char **root, char ***init_args)
 
 int main(int argc, char **argv, char **envp)
 {
-	FILE *log,*input;
+	FILE *log;
 	char 	*line, // where we place the readed line
 				*start, // where our args start
 				*root, // directory to chroot
 				*blkdev, // block device to mount on newroot
-				**new_argv, // init args
-				*input_file_path; // input file path
+				**new_argv; // init args
 	int i,mounted_twice; // general purpose integer
 
 	line = blkdev = root = NULL;
@@ -256,7 +255,7 @@ int main(int argc, char **argv, char **envp)
 				if(!read_our_cmdline(line))
 				{
 					umount("/proc");
-					if((start=strstr(line,CMDLINE_OPTION))
+					if((start=strstr(line,CMDLINE_OPTION)))
 					{
 						start+=CMDLINE_OPTION_LEN;
 						if(!parser(start,&blkdev,&root,&new_argv))
