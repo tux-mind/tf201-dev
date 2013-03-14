@@ -1,0 +1,38 @@
+hi all,
+this version has big changes!
+now we have 2 projects:
+o kernel_chooser is a program that can boot any kernel with or without any initrd
+o root_chooser is a program that can change the root filesystem on boot
+
+root_chooser now read it's options from the kernl command line.
+it looks for the newroot option and parse it as follow:
+newroot=blkdev:root:init,arg1,arg2
+where:
+o blkdev is the device to mount
+o root is the directory/dd image/initrd image in the provious device to chroot in
+o init is the init program into the new root
+o arg1,arg2,.. are optional args to the init program
+
+kernel_chooser work with config files. the syntax his this:
+NAME/DESCRIPTION
+blkdev:kernel:initrd
+CMDLINE
+
+where:
+o NAME/DESCRIPTION is an optional name for the boot entry
+o blkdev is the device where he can found the next files
+o kernel is the kernel zImage/uImage/Image to boot
+o initrd is an optional initial ramdisk
+o CMDLINE is an option cmdline for the booted kernel
+
+if no CMDLINE is found or his length is 0 the default one wil be used.
+else if CMDLINE starts with a '+' sing this will be appended to the default one
+else CMDLINE will be used as commandline for the booted kernel
+
+
+NOTE:
+the booted kernel ( called also "guest" kernel ) must suport kexec loading.
+apply this patch to your kernel: https://gist.github.com/4458581
+on TF201 you must provide at at least this options for a standard kernel:
+"mem=1022M@2048M mem=1022M@2048M tegra_fbmem=4098560@0xabe01000 gpt"
+you can compile it into your kernel using CONFIG_CMDLINE if you wish

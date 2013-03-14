@@ -35,4 +35,4 @@ initrd:
 	cd $(INITRD_DIR); find . | cpio --create --format='newc' > ../$(INITRD); gzip -f ../$(INITRD)
 
 clean:
-	rm $(TARGET_BIN) *.o
+	rm -f $(TARGET_BIN) *.o
