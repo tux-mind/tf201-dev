@@ -12,7 +12,6 @@
 
 // start android init at start for give ADB access
 //#define ADB
-#define DEBUG
 
 #define MDEV_ARGS { "/bin/mdev","-s",NULL }
 

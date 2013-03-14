@@ -1,3 +1,25 @@
+/*
+ * kexec: Linux boots Linux
+ *
+ * Copyright (C) 2003-2005  Eric Biederman (ebiederm@xmission.com)
+ *
+ * Modified (2007-05-15) by Francesco Chiechi to rudely handle mips platform
+ * Modified (2013-03-04) by Dragano Massimo for kernel_chooser
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation (version 2 of the License).
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -14,7 +36,6 @@
 #ifndef _O_BINARY
 #define _O_BINARY 0
 #endif
-//#include <ctype.h>
 
 #include "kexec.h"
 #include "common.h"
@@ -1473,7 +1494,7 @@ int elf_rel_set_symbol(struct mem_ehdr *ehdr,
 		return -1;
 	}
 	if (sym.st_size != size) {
-		ERROR("Symbol: %s has size: %ld not %u\n",name, sym.st_size, size);
+		ERROR("Symbol: %s has size: %ld not %d\n",name, sym.st_size, size);
 		return -1;
 	}
 	shdr = &ehdr->e_shdr[sym.st_shndx];

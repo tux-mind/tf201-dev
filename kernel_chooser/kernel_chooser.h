@@ -14,16 +14,16 @@
 // the device containing DATA_DIR
 #define DATA_DEV "/dev/mmcblk0p8"
 // the directory contains all configs
-#define DATA_DIR "/data/.boot.d/"
-#define DATA_DIR_STRLEN 14
+#define DATA_DIR "/data/.kernel.d/"
+#define DATA_DIR_STRLEN 16
 // the name of the file where we read the default boot options
-#define DEFAULT_CONFIG "/data/.boot"
+#define DEFAULT_CONFIG "/data/.kernel"
 // the console to use
 #define CONSOLE "/dev/tty1"
 // maximum length for a boot entry name
 #define MAX_NAME 120
 
-#define HEADER 	"root_chooser - version 6\n"\
+#define HEADER 	"kernel_chooser - version 1\n"\
 				"say THANKS to the 4 penguins!\n"\
 				"Open Source rocks! - tux_mind <massimo.dragano@gmail.com>\n"\
 				"                   - smasher816 <smasher816@gmail.com>\n\n"

@@ -98,15 +98,19 @@ void print_menu(menu_entry *list)
 	// print entries
 	printf("%c) boot android\n",MENU_ANDROID);
 	if(have_default)
+	{
 		printf("%c) boot the default config\n",MENU_DEFAULT);
+		printed_lines++;
+	}
 	printf("%c) reboot\n",MENU_REBOOT);
 	printf("%c) poweroff\n",MENU_HALT);
 	printf("%c) reboot recovery\n",MENU_RECOVERY);
 #ifdef SHELL
 	printf("%c) emergency shell\n",MENU_SHELL);
+	printed_lines++;
 #endif
 	printf("   ------------------\n");
-	for(printed_lines=1,current=list;current;current=current->next,printed_lines++)
+	for(printed_lines+=5,current=list;current;current=current->next,printed_lines++)
 		printf("%u) %s\n",current->id,current->name);
 }
 

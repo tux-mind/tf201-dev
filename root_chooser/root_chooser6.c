@@ -82,32 +82,27 @@ void fgets_fix(char *string)
 }
 
 /* read the current cmdline from proc
- * return the size of the readed command line.
+ * return 0 on success, -1 on error
  * if an error occours 0 is returned.
  * WARN: dest MUST be at least COMMAND_LINE_SIZE long
  */
 int read_our_cmdline(char *dest)
 {
-	int fd,len;
+	int fd;
 
 	memset(dest,'\0',COMMAND_LINE_SIZE);
 
 	if((fd = open("/proc/cmdline",O_RDONLY)) < 0)
 		return -1;
-	if((len = read(fd, dest, COMMAND_LINE_SIZE*(sizeof(char)))) < 0)
+	if((read(fd, dest, COMMAND_LINE_SIZE*(sizeof(char)))) < 0)
 	{
 		close(fd);
 		return -1;
 	}
 	close(fd);
-	for(fd=0;fd<len;fd++)
-		if(dest[fd]=='\n')
-		{
-			dest[fd]='\0';
-			len = fd;
-			break;
-		}
-	return len;
+	// cmdline is stored with a final '\n', we don't like this
+	fgets_fix(dest);
+	return 0;
 }
 
 /* parse line as "blkdev:root_directory:init_path,init_arg1,init_arg2..."
@@ -242,19 +237,10 @@ int main(int argc, char **argv, char **envp)
 	line = blkdev = root = NULL;
 	new_argv = NULL;
 	i=mounted_twice=0;
-	
+
 
 	if((log = fopen(LOG,"w")) != NULL)
 	{
-		#ifdef DEBUG
-		mount("sysfs","/sys","sysfs",MS_RELATIME,"");
-		mdev(envp);
-		mount("/dev/mmcblk0p8","/data","ext4",0,"");
-		umount("/sys");
-		fclose(log);
-		log = fopen("/data/root_chooser.log","w");
-		fprintf(log,"this is a desperate debugging session..\n");
-		#endif
 		// mount /proc
 		if(!mount("proc","/proc","proc",MS_RELATIME,""))
 		{

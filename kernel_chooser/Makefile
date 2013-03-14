@@ -10,12 +10,12 @@ TARGET_BIN=kernel_chooser
 INITRD_DIR=initramfs
 INITRD=initrd
 
-all: v1 initrd
+all: v1 initrd use_initrd
 
 v1: kernel_chooser.c menu2.o kexec.c zlib.o lzma.o sha256.o
 	$(CC) $(CFLAGS) -o $(TARGET_BIN) $? $(LDFLAGS)
 
-%.o: %.c
+%.o: %.c common.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 initrd: $(TARGET_BIN) $(INITRD_DIR)
@@ -23,5 +23,10 @@ initrd: $(TARGET_BIN) $(INITRD_DIR)
 	# we have to run this on a single line ( make run a shell per line O.o )
 	cd $(INITRD_DIR); find . | cpio --create --format='newc' > ../$(INITRD); gzip -f ../$(INITRD)
 
+use_initrd:
+	cp $(INITRD).gz ../test/initramfs.gz
+	../scripts/reflash_kernel.sh
+
+
 clean:
-	rm $(TARGET_BIN) *.o
+	rm -f $(TARGET_BIN) *.o

@@ -17,18 +17,17 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-/* root_choooser works as follows:
+/* kernel_choooser works as follows:
  *
- * 1) read the contents of /data/.root.d/
+ * 1) read the contents of /data/.kernel.d/
  * 2) parse as "description \n blkdev:kernel:initrd \n cmdline"
  * 3) wait 10 seconds for the user to press a key.
-       if no key is pressed, boot the default configuration
+       if no key is pressed, boot the default configuration in /data/.kernel
        if a key is pressed, display a menu for manual selection
  * 4) kexec hardboot into the new kernel
- * 5) the new kernel (and initrd) will then mount and boot the new system
  *
  * ** NOTE **
- * if something goes wrong will continue and boot into android
+ * if something goes wrong will continue and boot into android via chroot
  */
 
 
@@ -273,7 +272,7 @@ int config_parser(char *line,char **blkdev, char**kernel, char **initrd)
  * others are optionals
  * check cmdline_parser for info about CMDLINE
  * @file: the parsed file
- * @fallback_name: name to use in no one has been found
+ * @fallback_name: name to use if no one has been found
  * @list: the entries list
  * @def_entry: optional pointer to the menu_entry struct
  */
@@ -388,16 +387,8 @@ void take_console_control(void)
 int open_console(void)
 {
 	int i;
-#ifdef DEBUG
-	int fd;
-#endif
 
 	mdev();
-#ifdef DEBUG
-	fd = open("/dev/kmsg",O_WRONLY);
-	write(fd,"kernel_chooser: called open_console\n",35);
-	close(fd);
-#endif
 	if(access(CONSOLE,R_OK|W_OK))
 	{ // no console yet... wait until timeout
 		sleep(1);
@@ -413,40 +404,34 @@ int open_console(void)
 		}
 	}
 	take_console_control();
-#ifdef DEBUG
-	fd = open("/dev/kmsg",O_WRONLY);
-	write(fd,"kernel_chooser: open_console ok\n",32);
-	close(fd);
-#endif
 	return 0;
 }
 
 char getch()
 {
-        char buf = 0;
-        struct termios old = {0};
-        if (tcgetattr(0, &old) < 0)
-                return -1;
-        old.c_lflag &= ~ICANON;
-        old.c_lflag &= ~ECHO;
-        old.c_cc[VMIN] = 1;
-        old.c_cc[VTIME] = 0;
-        if (tcsetattr(0, TCSANOW, &old) < 0)
-                return -1;
-        if (read(0, &buf, 1) < 0)
-                return -1;
-        old.c_lflag |= ICANON;
-        old.c_lflag |= ECHO;
-        if (tcsetattr(0, TCSADRAIN, &old) < 0)
-                return -1;
-        return (buf);
+	char buf = 0;
+	struct termios old,new;
+
+	if(tcgetattr(STDIN_FILENO, &old)<0)
+		return -1;
+	new = old;
+	new.c_lflag &= ~(ICANON | ECHO);
+	new.c_cc[VMIN] = 1;
+	new.c_cc[VTIME] = 0;
+	if (tcsetattr(STDIN_FILENO, TCSANOW, &new) < 0)
+					return -1;
+	if (read(STDIN_FILENO, &buf, 1) < 0)
+					return -1;
+	if (tcsetattr(0, TCSADRAIN, &old) < 0)
+					return -1;
+	return buf;
 }
 
 void press_enter(void)
 {
-	char buff[MAX_LINE];
+	char garbage[MAX_LINE];
 	INFO("press <ENTER> to continue..."); // the last "\n" is added by the user
-	fgets(buff,MAX_LINE,stdin);
+	fgets(garbage,MAX_LINE,stdin);
 }
 
 int wait_for_keypress(void)
@@ -458,25 +443,23 @@ int wait_for_keypress(void)
 
 	if((pid = fork()))
 	{
-		take_console_control();
     do
 		{
 			wpid = waitpid(pid, &stat, WNOHANG);
-			if (wpid == 0)
+			if(!wpid)
 			{
-				if (timeout) {
 					printf("\r\033[1KAutomatic boot in %2u seconds...", timeout); // rewrite the line every second
 					fflush(stdout);
-				}
-				if (timeout--)
+					timeout--;
 					sleep(1);
-				else
-					kill(pid, SIGKILL);
 			}
     } while (wpid == 0 && timeout);
-		take_console_control();
-		if(!timeout || !WIFEXITED(stat))
+		if(wpid== 0 || !timeout || !WIFEXITED(stat))
+		{
+			if(!wpid)
+				kill(pid, SIGKILL);
 			stat = MENU_DEFAULT_NUM; // no keypress
+		}
 		else
 			stat = WEXITSTATUS(stat);
 		printf("\r\033[2K");
@@ -489,8 +472,6 @@ int wait_for_keypress(void)
 	}
 	else
 	{
-		take_console_control();
-		printf("\r\033[2K");
 		exit( getch() );
 		return 0; /* not reached */
 	}
@@ -531,6 +512,7 @@ int get_user_choice(void)
 		default:
 			i = atoi(buff);
 	}
+	printed_lines++; // user press enter
 	return i;
 }
 
@@ -661,7 +643,10 @@ int main(int argc, char **argv, char **envp)
 	}
 	// check for a default entry
 	if(parser(DEFAULT_CONFIG,"default",NULL,&def_entry) && fatal_error)
+	{
+		umount("/data");
 		goto error;
+	}
 	if(!have_default)
 		INFO("no default config found\n");
 	if(parse_data_directory(&list))
@@ -670,9 +655,10 @@ int main(int argc, char **argv, char **envp)
 		goto error;
 	}
 	umount("/data");
-#ifdef STOP_BEFORE_MENU
-	press_enter();
-#endif
+	// we have printed something, give user time to read
+	// ( >1 because INFO(mounting data) is not useful )
+	if(printed_lines>1)
+		press_enter();
 	clear_screen();
 	// automatically boot in TIMEOUT_BOOT seconds
 	if ((i=wait_for_keypress()) == MENU_DEFAULT_NUM)
@@ -700,7 +686,6 @@ skip_menu:
 		case MENU_DEFAULT_NUM:
 			if(!have_default)
 			{
-				DEBUG("want to boot default but no one has been found\n");
 				WARN("invalid choice\n");
 				goto error;
 			}
@@ -745,22 +730,18 @@ skip_menu:
 		umount(NEWROOT);
 		goto error;
 	}
+	umount(NEWROOT);
 	DEBUG("kernel = \"%s\"\n",item->kernel);
 	DEBUG("initrd = \"%s\"\n",item->initrd);
 	DEBUG("cmdline = \"%s\"\n",item->cmdline);
+
+	// we made it, time to clean up and kexec
+	INFO("booting \"%s\"\n",item->name);
+
 	#ifdef DEVELOPMENT
 	press_enter();
 	#endif
-
-	// we made it, time to clean up and kexec
-	DEBUG("mounted \"%s\" on \"%s\"\n",item->blkdev,NEWROOT);
-	INFO("booting \"%s\"\n",item->name);
-
-	// set to NULL to avoid free() from free_menu()
-	item->initrd = item->kernel = item->cmdline = NULL;
-
 	free_menu(list);
-	DEBUG("after free_menu()\n");
 	if(have_default)
 		free_entry(def_entry);
 	if(!fork())
@@ -782,10 +763,7 @@ error:
 		goto menu_prompt;
 	free_menu(list);
 	if(have_default)
-	{
 		free_entry(def_entry);
-		free(def_entry);
-	}
 	umount("/proc");
 	fatal(argv,envp);
 	exit(EXIT_FAILURE);
