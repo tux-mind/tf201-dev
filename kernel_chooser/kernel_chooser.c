@@ -22,12 +22,9 @@
  * 1) read the contents of /data/.kernel.d/
  * 2) parse as "description \n blkdev:kernel:initrd \n cmdline"
  * 3) wait 10 seconds for the user to press a key.
-       if no key is pressed, boot the default configuration in /data/.kernel
-       if a key is pressed, display a menu for manual selection
+ *    if no key is pressed, boot the default configuration in /data/.kernel
+ *    if a key is pressed, display a menu for manual selection
  * 4) kexec hardboot into the new kernel
- *
- * ** NOTE **
- * if something goes wrong will continue and boot into android via chroot
  */
 
 
@@ -53,15 +50,6 @@
 
 // if == 1 => someone called FATAL we have to exit
 int fatal_error;
-
-// fatal error occourred, boot up android
-void fatal(char **argv,char **envp)
-{
-	// TODO: add additional error checking?
-	chdir(NEWROOT);
-	chroot(NEWROOT);
-	execve("/init",argv,envp);
-}
 
 /* make /dev from /sys */
 void mdev(void)
@@ -489,9 +477,6 @@ int get_user_choice(void)
 	for(i=0;i<MAX_LINE && buff[i] != '\0' && isspace(buff[i]);i++);
 	switch(buff[i])
 	{
-		case MENU_ANDROID:
-			i = MENU_ANDROID_NUM;
-			break;
 		case MENU_DEFAULT:
 			i = MENU_DEFAULT_NUM;
 			break;
@@ -661,12 +646,8 @@ int main(int argc, char **argv, char **envp)
 		press_enter();
 	clear_screen();
 	// automatically boot in TIMEOUT_BOOT seconds
-	if ((i=wait_for_keypress()) == MENU_DEFAULT_NUM)
-	{
-		if(def_entry==NULL) // no default entry, boot android
-			i=MENU_ANDROID_NUM;
+	if (have_default && ((i=wait_for_keypress()) == MENU_DEFAULT_NUM))
 		goto skip_menu; // automatic boot ( no input required )
-	}
 
 	// now we have all data. ( NOTE: 'i' contains the pressed key if needed )
 
@@ -679,10 +660,6 @@ skip_menu:
 	// decide what to do
 	switch (i)
 	{
-		case MENU_ANDROID_NUM:
-			INFO("booting android\n");
-			fatal_error = 1;
-			goto error;
 		case MENU_DEFAULT_NUM:
 			if(!have_default)
 			{
@@ -765,6 +742,5 @@ error:
 	if(have_default)
 		free_entry(def_entry);
 	umount("/proc");
-	fatal(argv,envp);
 	exit(EXIT_FAILURE);
 }
