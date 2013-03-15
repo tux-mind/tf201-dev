@@ -32,7 +32,10 @@ else CMDLINE will be used as commandline for the booted kernel
 
 NOTE:
 the booted kernel ( called also "guest" kernel ) must suport kexec loading.
-apply this patch to your kernel: https://gist.github.com/4458581
+apply these patches to your kernel:
+http://git.lilstevie.geek.nz/?p=ubuntu/linux_tf201.git;a=patch;h=54c2e480682afb0629f3854dfea4154f528421e5
+http://git.lilstevie.geek.nz/?p=ubuntu/linux_tf201.git;a=patch;h=9f554eed7f41ffedf2f52a2a0098660ee029c576
+
 on TF201 you must provide at at least this options for a standard kernel:
 "mem=1022M@2048M mem=1022M@2048M tegra_fbmem=4098560@0xabe01000 gpt"
 you can compile it into your kernel using CONFIG_CMDLINE if you wish
