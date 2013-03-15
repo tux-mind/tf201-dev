@@ -96,7 +96,6 @@ void print_menu(menu_entry *list)
 	rewind(stdout);
 	ftruncate(1,0);
 	// print entries
-	printf("%c) boot android\n",MENU_ANDROID);
 	if(have_default)
 	{
 		printf("%c) boot the default config\n",MENU_DEFAULT);
@@ -110,7 +109,7 @@ void print_menu(menu_entry *list)
 	printed_lines++;
 #endif
 	printf("   ------------------\n");
-	for(printed_lines+=5,current=list;current;current=current->next,printed_lines++)
+	for(printed_lines+=4,current=list;current;current=current->next,printed_lines++)
 		printf("%u) %s\n",current->id,current->name);
 }
 

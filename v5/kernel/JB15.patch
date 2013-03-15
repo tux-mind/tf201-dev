@@ -1293,8 +1293,8 @@ diff -ur stock-kernel/.config linux/.config
 +# CONFIG_B43LEGACY is not set
 +CONFIG_BCM4329=m
 +# CONFIG_BCM4329_FIRST_SCAN is not set
-+CONFIG_BCM4329_FW_PATH="/system/vendor/firmware/fw_bcm4329.bin"
-+CONFIG_BCM4329_NVRAM_PATH="/system/etc/nvram_4329.txt"
++CONFIG_BCM4329_FW_PATH="/lib/firmware/fw_bcm4329.bin"
++CONFIG_BCM4329_NVRAM_PATH="/lib/firmware/nvram_4329.txt"
 +CONFIG_BCM4329_WIFI_CONTROL_FUNC=y
 +# CONFIG_BCM4329_DHD_USE_STATIC_BUF is not set
 +# CONFIG_BCM4329_HW_OOB is not set
@@ -1302,8 +1302,8 @@ diff -ur stock-kernel/.config linux/.config
 +# CONFIG_BCM4329_GET_CUSTOM_MAC_ENABLE is not set
 +# CONFIG_BCM4329_CSCAN_ENABLE is not set
 +# CONFIG_BCM4330 is not set
-+CONFIG_BCMDHD_FW_DIR="/system/vendor/firmware"
-+CONFIG_BCMDHD_NVRAM_PATH="/data/misc/wifi/nvram.txt"
++CONFIG_BCMDHD_FW_DIR="/lib/firmware"
++CONFIG_BCMDHD_NVRAM_PATH="/lib/firmware/nvram.txt"
 +CONFIG_BCMDHD_WIFI_CONTROL_FUNC=y
 +CONFIG_BCMDHD_HW_OOB=y
 +# CONFIG_BCM4334 is not set

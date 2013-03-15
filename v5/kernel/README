@@ -1,0 +1,4 @@
+o zImage is the conpressed image of the 10.4.2.15 asus kernel with the JB15.patch ( http://dlcdnet.asus.com/pub/ASUS/EeePAD/TF201/kernel_V10_4_2_15.zip )
+o android_kernel is the stock 10.4.2.15 kernel with the kexec guest patch
+o android_initrd is the default android initrd
+o JB15.patch: look zImage description above
