@@ -8,11 +8,30 @@
 #include <string.h>
 #include <errno.h>
 
-#include "menu2.h"
 #include "common2.h"
+#include "menu3.h"
+
+const char *def_entries[] = 
+{
+	"boot default config",
+	"reboot",
+	"shutdown",
+	"reboot recovery"
+	#ifdef SHELL
+	,"emergency shell"
+	#endif
+};
+
+int def_offsets[] =
+{
+	0,0,0,0
+#ifdef SHELL
+	,0
+#endif
+};
 
 int printed_lines,have_default,startx,menu_width;
-char *line;
+char *line,**entries;
 
 void free_entry(menu_entry *item)
 {
@@ -96,27 +115,29 @@ menu_entry *del_entry(menu_entry *list, menu_entry *item)
 void print_menu(menu_entry *list)
 {
 	menu_entry *current;
+	int i,def_entries_num;
 	// clear screen
 	for(;printed_lines;printed_lines--)
 		printf("\033[A\033[2K"); // go UP and CLEAR line ( see VT100 reference )
 	rewind(stdout);
 	ftruncate(1,0);
-	// print entries
-	if(have_default)
-	{
-		printf("%c) boot the default config\n",MENU_DEFAULT);
-		printed_lines++;
-	}
-	printf("%c) reboot\n",MENU_REBOOT);
-	printf("%c) poweroff\n",MENU_HALT);
-	printf("%c) reboot recovery\n",MENU_RECOVERY);
-#ifdef SHELL
-	printf("%c) emergency shell\n",MENU_SHELL);
-	printed_lines++;
-#endif
+	printed_lines = def_entries_num = sizeof(def_entries) / sizeof(def_entries[0]);
 	printf("%s\n",line);
-	for(printed_lines+=4,current=list;current;current=current->next,printed_lines++)
-		printf("%u) %s\n",current->id,current->name);
+	// print default entries
+	for(i=0;i<def_entries_num;i++)
+	{
+		//TODO
+		printf("%1$*2$s|%1$*4$s%3$s%1$*4$s|\n"," ",startx,def_entries[i],def_offsets[i]);
+	}
+	// print entries
+	printf("%s\n",line);
+	for(current=list;current;current=current->next,printed_lines++)
+	{
+		if((int)current->even)
+			printf("%1$*2$s|%1$*4$s%3$s%1$*5$s|\n"," ",startx,current->name,current->xoffset,current->xoffset - 5);
+		else
+			printf("%1$*2$s|%1$*4$s%3$s%1$*4$s|\n"," ",startx,current->name,current->xoffset);
+	}
 }
 
 void get_term_size(int *x, int*y)
@@ -128,28 +149,45 @@ void get_term_size(int *x, int*y)
 	*y = term.ws_row;
 }
 
-int compute_screen_data()
+int compute_screen_data(menu_entry *list)
 {
-	int x,y;
+	int x,y,i,def_entries_num;
+	menu_entry *current;
+	
+	def_entries_num = sizeof(def_entries) / sizeof(def_entries[0]);
 
 	get_term_size(&x,&y);
-	line = malloc((x+1)*sizeof(char));
+	menu_width = (x * MENU_WIDTH_PERC) / 100;
+	startx = ((x - menu_width)/2);
+	line = malloc((startx+menu_width+2)*sizeof(char));
 	if(!line)
 	{
 		FATAL("malloc - %s\n",strerror(errno));
 		return -1;
 	}
 	// build line
-	// "         +--------------+        "
+	// <-----------screen width---------->
+	// "         +--------------+\n       "
 	// <-startx->|<-menu_width->|
-	menu_width = (x * MENU_WIDTH_PERC) / 100;
-	startx = ((x - menu_width)/2);
 	memset(line,' ',startx);
 	line[startx] = '+';
 	memset((line+startx+1),'-',menu_width);
 	line[startx+menu_width] = '+';
-	memset((line+startx+menu_width+1),' ',startx);
-	line[x] = '\0';
+	line[startx+menu_width+1] = '\n';
+	//compute default entries offsets
+	for(i=0;i<def_entries_num;i++)
+		def_offsets[i] = ((menu_width - strlen(def_entries[i]))/2);
+	//compute user entries offsets
+	// use i as temporary variable
+	for(current=list;current;current=current->next)
+	{
+		i = strlen(current->name);
+		current->xoffset = ((menu_width - i)/2);
+		if(i%2) // odd
+			current->even = (unsigned char)0;
+		else
+			current->even = (unsigned char)1;
+	}
 	return 0;
 }
 /*
