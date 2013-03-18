@@ -18,10 +18,12 @@
 #define MENU_RECOVERY_NUM	-4
 #define MENU_SHELL_NUM		-5
 
+#define MENU_WIDTH_PERC		50	
 
 typedef struct _menu_entry
 {
-	unsigned int id;
+	unsigned int id,xoffset;
+	unsigned char even; // used as bool
 	char 	*name,
 				*blkdev,
 				*kernel,
@@ -34,7 +36,7 @@ void free_entry(menu_entry *);
 void free_menu(menu_entry *);
 void print_menu(menu_entry *);
 void clear_screen(void);
-int compute_screen_data(void);
+int compute_screen_data(menu_entry *);
 menu_entry *add_entry(menu_entry *, char *, char *,char *, char *, char *);
 menu_entry *del_entry(menu_entry *, menu_entry *);
 menu_entry *get_item_by_id(menu_entry *, int);
