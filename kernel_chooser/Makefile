@@ -12,10 +12,16 @@ INITRD=initrd
 
 all: v1 initrd use_initrd
 
+test: ncurse_test.c
+	$(CC) -g -o $@ $< -lmenu
+
+v2: kernel_chooser2.c menu3.o kexec.o lzma.o zlib.o sha256.o
+	$(CC) $(CFLAGS) -o $(TARGET_BIN) $? $(LDFLAGS)
+
 v1: kernel_chooser.c menu2.o kexec.c zlib.o lzma.o sha256.o
 	$(CC) $(CFLAGS) -o $(TARGET_BIN) $? $(LDFLAGS)
 
-%.o: %.c common.h
+%.o: %.c common.h common2.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 initrd: $(TARGET_BIN) $(INITRD_DIR)
