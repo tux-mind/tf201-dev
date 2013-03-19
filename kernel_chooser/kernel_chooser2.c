@@ -262,9 +262,8 @@ int config_parser(char *line,char **blkdev, char**kernel, char **initrd)
  * @file: the parsed file
  * @fallback_name: name to use if no one has been found
  * @list: the entries list
- * @def_entry: optional pointer to the menu_entry struct
  */
-int parser(char *file, char *fallback_name, menu_entry **list, menu_entry **def_entry)
+int parser(char *file, char *fallback_name, menu_entry **list)
 {
 	FILE *fin;
 	char name_line[MAX_NAME],line[MAX_LINE],*blkdev,*kernel,*initrd,*cmdline,*name;
@@ -274,22 +273,22 @@ int parser(char *file, char *fallback_name, menu_entry **list, menu_entry **def_
 
 	if(!(fin=fopen(file,"r")))
 	{
-		// if we are reading the default entry this isn't an error
-		if(!def_entry)
-			ERROR("cannot open \"%s\" - %s\n", file,strerror(errno));
+		//TODO: if we are reading the default entry this isn't an error
+		ERROR("cannot open \"%s\" - %s\n", file,strerror(errno));
 		//nothing to free, exit now
 		return -1;
 	}
 
 	if(!fgets(name_line,MAX_NAME,fin) || !fgets(line,MAX_LINE,fin)) // read the second line
 	{
-		fclose(fin);
 		// error
 		if(!feof(fin))
 		{
 			ERROR("cannot read \"%s\" - %s\n",file,strerror(errno));
+			fclose(fin);
 			return -1;
 		}
+		fclose(fin);
 		WARN("file \"%s\" must have at least 2 lines\n",file);
 		return -1;
 	}
@@ -312,35 +311,16 @@ int parser(char *file, char *fallback_name, menu_entry **list, menu_entry **def_
 	strncpy(name,name_line,name_len);
 	*(name+name_len)='\0';
 	if (
-		config_parser(line,&blkdev,&kernel,&initrd) ||
-		cmdline_parser(fgets_fix(fgets(line,MAX_LINE,fin)),&cmdline)
+		!config_parser(line,&blkdev,&kernel,&initrd) &&
+		!cmdline_parser(fgets_fix(fgets(line,MAX_LINE,fin)),&cmdline)
 	)
-		goto error_with_fclose;
-	fclose(fin);
-	if(!def_entry)
 	{
+		fclose(fin);
 		*list = add_entry(*list, name, blkdev, kernel, cmdline, initrd);
 		return 0;
 	}
-	// we are building the default entry, which isn't in the list
-	*def_entry = malloc(sizeof(menu_entry));
-	if(!(*def_entry))
-	{
-		FATAL("malloc - %s\n",strerror(errno));
-		goto error;
-	}
-	(*def_entry)->name 		= name;
-	(*def_entry)->kernel 	= kernel;
-	(*def_entry)->initrd 	= initrd;
-	(*def_entry)->blkdev 	= blkdev;
-	(*def_entry)->cmdline	= cmdline;
-	(*def_entry)->next = NULL;
-	have_default=1;
-	return 0;
 
-error_with_fclose:
 	fclose(fin);
-error:
 	if(blkdev)
 		free(blkdev);
 	if(kernel)
@@ -446,7 +426,7 @@ int wait_for_keypress(void)
 		{
 			if(!wpid)
 				kill(pid, SIGKILL);
-			stat = MENU_DEFAULT_NUM; // no keypress
+			stat = MENU_DEFAULT; // no keypress
 		}
 		else
 			stat = WEXITSTATUS(stat);
@@ -464,7 +444,7 @@ int wait_for_keypress(void)
 		return 0; /* not reached */
 	}
 }
-
+/*
 int get_user_choice(void)
 {
 	int i;
@@ -500,7 +480,7 @@ int get_user_choice(void)
 	printed_lines++; // user press enter
 	return i;
 }
-
+*/
 int parse_data_directory(menu_entry **list)
 {
 	DIR *dir;
@@ -521,7 +501,7 @@ int parse_data_directory(menu_entry **list)
 		if(d->d_type != DT_DIR)
 		{
 			DEBUG("parsing %s\n",d->d_name);
-			if(parser(d->d_name,d->d_name,list,NULL))
+			if(parser(d->d_name,d->d_name,list))
 			{
 				if(fatal_error)
 				{
@@ -594,7 +574,7 @@ void shell(void)
 int main(int argc, char **argv, char **envp)
 {
 	int i;
-	menu_entry *list=NULL,*item,*def_entry=NULL;
+	menu_entry *list=NULL,*item;
 
 	// errors before open_console are fatal
 	fatal_error = 1;
@@ -626,12 +606,14 @@ int main(int argc, char **argv, char **envp)
 		goto error;
 	}
 	// check for a default entry
-	if(parser(DEFAULT_CONFIG,"default",NULL,&def_entry) && fatal_error)
+	if(parser(DEFAULT_CONFIG,"default",&list) && fatal_error)
 	{
 		umount("/data");
 		goto error;
 	}
-	if(!have_default)
+	if(list)
+		have_default=1;
+	else
 		INFO("no default config found\n");
 	if(parse_data_directory(&list))
 	{
@@ -648,7 +630,7 @@ int main(int argc, char **argv, char **envp)
 		press_enter();
 	clear_screen();
 	// automatically boot in TIMEOUT_BOOT seconds
-	if (have_default && ((i=wait_for_keypress()) == MENU_DEFAULT_NUM))
+	if (have_default && ((i=wait_for_keypress()) == MENU_DEFAULT))
 		goto skip_menu; // automatic boot ( no input required )
 
 	// now we have all data. ( NOTE: 'i' contains the pressed key if needed )
@@ -657,30 +639,36 @@ int main(int argc, char **argv, char **envp)
 menu_prompt:
 	//print_menu(list);
 	i=nc_get_user_choice(list);
+	take_console_control();
 skip_menu:
 	DEBUG("user chose %d\n",i);
+	press_enter();
 	// decide what to do
 	switch (i)
 	{
-		case MENU_DEFAULT_NUM:
+		case MENU_FATAL_ERROR:
+			FATAL("ncurses - %s\n",strerror(errno));
+			goto error;
+			break;
+		case MENU_DEFAULT:
 			if(!have_default)
 			{
 				WARN("invalid choice\n");
 				goto error;
 			}
-			item=def_entry;
+			item=list;
 			break;
-		case MENU_REBOOT_NUM:
+		case MENU_REBOOT:
 			init_reboot(RB_AUTOBOOT);
 			goto error;
-		case MENU_HALT_NUM:
+		case MENU_HALT:
 			init_reboot(RB_HALT_SYSTEM);
 			goto error;
-		case MENU_RECOVERY_NUM:
+		case MENU_RECOVERY:
 			reboot_recovery();
 			goto error;
 #ifdef SHELL
-		case MENU_SHELL_NUM:
+		case MENU_SHELL:
 			shell();
 			goto menu_prompt;
 #endif
@@ -721,8 +709,6 @@ skip_menu:
 	press_enter();
 	#endif
 	free_list(list);
-	if(have_default)
-		free_entry(def_entry);
 	if(!fork())
 	{
 		k_exec(); // bye bye
@@ -741,8 +727,6 @@ error:
 	if(!fatal_error)
 		goto menu_prompt;
 	free_list(list);
-	if(have_default)
-		free_entry(def_entry);
 	umount("/proc");
 	exit(EXIT_FAILURE);
 }
