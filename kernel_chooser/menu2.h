@@ -18,6 +18,9 @@
 #define MENU_RECOVERY_NUM	-4
 #define MENU_SHELL_NUM		-5
 
+// percentage of screen used by the menu
+#define MENU_WIDTH_PERC 50
+
 
 typedef struct _menu_entry
 {

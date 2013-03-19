@@ -5,15 +5,15 @@
 CC?=arm-unknown-linux-gnueabi-gcc
 LD=arm-unknown-linux-gnueabi-ld
 CFLAGS=-Wall -Werror -g -static
-LDFLAGS=-lz -llzma
+LDFLAGS=-lz -llzma -lmenu -lcurses
 TARGET_BIN=kernel_chooser
 INITRD_DIR=initramfs
 INITRD=initrd
 
-all: v1 initrd use_initrd
+all: v2 initrd use_initrd
 
 test: ncurse_test.c
-	$(CC) -g -o $@ $< -lmenu
+	$(CC) -g -o $@ $< -lmenu -lcurses
 
 v2: kernel_chooser2.c menu3.o kexec.o lzma.o zlib.o sha256.o
 	$(CC) $(CFLAGS) -o $(TARGET_BIN) $? $(LDFLAGS)

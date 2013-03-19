@@ -30,6 +30,7 @@ void free_menu(menu_entry *list)
 	for(current=list;current;current=current->next)
 		free_entry(current);
 }
+
 /** add an etry in the list
  * entries have an ID which is univoke for everyone.
  * this id starts from 1, since we decided that end-users can prefer this.
