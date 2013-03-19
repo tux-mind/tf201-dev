@@ -38,7 +38,7 @@
 #endif
 
 #include "kexec.h"
-#include "common.h"
+#include "common2.h"
 
 unsigned long long mem_min, mem_max;
 

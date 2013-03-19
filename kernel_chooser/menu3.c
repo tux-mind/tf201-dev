@@ -3,35 +3,13 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <string.h>
-#include <termios.h>
-#include <sys/ioctl.h>
-#include <string.h>
-#include <errno.h>
+#include <curses.h>
+#include <menu.h>
 
-#include "common2.h"
 #include "menu3.h"
+#include "common2.h"
 
-const char *def_entries[] = 
-{
-	"boot default config",
-	"reboot",
-	"shutdown",
-	"reboot recovery"
-	#ifdef SHELL
-	,"emergency shell"
-	#endif
-};
-
-int def_offsets[] =
-{
-	0,0,0,0
-#ifdef SHELL
-	,0
-#endif
-};
-
-int printed_lines,have_default,startx,menu_width;
-char *line,**entries;
+int printed_lines,have_default;
 
 void free_entry(menu_entry *item)
 {
@@ -48,7 +26,134 @@ void free_entry(menu_entry *item)
 	free(item);
 }
 
-void free_menu(menu_entry *list)
+void print_in_middle(WINDOW *win, int starty, int startx, int width, char *string, chtype color);
+
+int nc_get_user_choice(menu_entry *list)
+{
+	ITEM **my_items;
+	int c;
+	MENU *my_menu;
+	WINDOW *my_menu_win;
+	int n_choices, i, sizey, sizex;
+	menu_entry *current;
+	char **local_entries;
+
+	/* Initialize curses */
+	initscr();
+	start_color();
+	cbreak();
+	noecho();
+	keypad(stdscr, TRUE);
+	init_pair(1, COLOR_RED, COLOR_BLACK);
+	init_pair(2, COLOR_CYAN, COLOR_BLACK);
+
+	/* Compute manu size */
+	sizey = (LINES * MENU_HEIGHT_PERC)/100;
+	sizex = (COLS * MENU_WIDTH_PERC)/100;
+
+	/* Create items */
+	for(n_choices=0,current=list;current;current=current->next,n_choices++);
+	my_items = (ITEM **)malloc((n_choices+1)*sizeof(ITEM *)); // TODO: error handling
+	local_entries = malloc((n_choices+1)*sizeof(char *));
+	for(i=0,current=list;current;current=current->next,i++)
+	{
+		c = strlen(current->name); // TODO TODO TODO TODO TODO TODO
+		local_entries[i] = malloc((sizex+1)*sizeof(char));
+		memset(local_entries[i],' ',sizex);
+		strncpy((local_entries[i] + ((sizex - c)/2)),current->name,c);
+		local_entries[i][sizex]='\0';
+		my_items[i] = new_item(local_entries[i], NULL); // TODO: padd
+	}
+	my_items[i] = new_item(NULL,NULL);
+	/* Create menu */
+	my_menu = new_menu((ITEM **)my_items);
+	/* Set menu option not to show the description */
+	menu_opts_off(my_menu, O_SHOWDESC);
+
+	/* Create the window to be associated with the menu */
+	my_menu_win = newwin( sizey, sizex, (LINES-sizey)/2, (COLS-sizex)/2);
+	keypad(my_menu_win, TRUE);
+
+	/* Set main window and sub window */
+	set_menu_win(my_menu, my_menu_win);
+	set_menu_sub(my_menu, derwin(my_menu_win, sizey-3, sizex -2, 3, 1));
+	//set_menu_format(my_menu, 5, 1); // this set maximum Y
+	set_menu_format(my_menu, sizey-3,1);
+
+	/* Set menu mark to the string " * " */
+	set_menu_mark(my_menu, NULL);
+	/* Print a border around the main window and print a title */
+	box(my_menu_win, 0, 0);
+	print_in_middle(my_menu_win, 1, 0, sizex, "kernel_chooser", COLOR_PAIR(1));
+	mvwaddch(my_menu_win, 2, 0, ACS_LTEE);
+	mvwhline(my_menu_win, 2, 1, ACS_HLINE, sizex-2);
+	mvwaddch(my_menu_win, 2, sizex-1, ACS_RTEE);
+	/* Post the menu */
+	post_menu(my_menu);
+	wrefresh(my_menu_win);
+
+	attron(COLOR_PAIR(2));
+	mvprintw(LINES - 2, 0, "Use PageUp and PageDown to scoll down or up a page of items");
+	mvprintw(LINES - 1, 0, "Arrow Keys to navigate (Q to Exit)");
+	attroff(COLOR_PAIR(2));
+	refresh();
+
+	while((c = wgetch(my_menu_win)) != 'q')
+	{
+		switch(c)
+		{
+			case KEY_DOWN:
+				menu_driver(my_menu, REQ_DOWN_ITEM);
+				break;
+			case KEY_UP:
+				menu_driver(my_menu, REQ_UP_ITEM);
+				break;
+			case KEY_NPAGE:
+				menu_driver(my_menu, REQ_SCR_DPAGE);
+				break;
+			case KEY_PPAGE:
+				menu_driver(my_menu, REQ_SCR_UPAGE);
+				break;
+		}
+		wrefresh(my_menu_win);
+	}
+
+	/* Unpost and free all the memory taken up */
+	//TODO: FREEEEEEEEEE
+	unpost_menu(my_menu);
+	free_menu(my_menu);
+	for(i = 0; i < n_choices; ++i)
+					free_item(my_items[i]);
+	free(my_items);
+	endwin();
+	return MENU_REBOOT_NUM;
+}
+
+void print_in_middle(WINDOW *win, int starty, int startx, int width, char *string, chtype color)
+{
+	int length, x, y;
+	float temp;
+
+	if(win == NULL)
+		win = stdscr;
+	getyx(win, y, x);
+	if(startx != 0)
+		x = startx;
+	if(starty != 0)
+		y = starty;
+	if(width == 0)
+		width = 80;
+
+	length = strlen(string);
+	temp = (width - length)/ 2;
+	x = startx + (int)temp;
+	wattron(win, color);
+	mvwprintw(win, y, x, "%s", string);
+	wattroff(win, color);
+	refresh();
+}
+
+void free_list(menu_entry *list)
 {
 	menu_entry *current;
 	for(current=list;current;current=current->next)
@@ -115,93 +220,29 @@ menu_entry *del_entry(menu_entry *list, menu_entry *item)
 void print_menu(menu_entry *list)
 {
 	menu_entry *current;
-	int i,def_entries_num;
 	// clear screen
 	for(;printed_lines;printed_lines--)
 		printf("\033[A\033[2K"); // go UP and CLEAR line ( see VT100 reference )
 	rewind(stdout);
 	ftruncate(1,0);
-	printed_lines = def_entries_num = sizeof(def_entries) / sizeof(def_entries[0]);
-	printf("%s\n",line);
-	// print default entries
-	for(i=0;i<def_entries_num;i++)
-	{
-		//TODO
-		printf("%1$*2$s|%1$*4$s%3$s%1$*4$s|\n"," ",startx,def_entries[i],def_offsets[i]);
-	}
 	// print entries
-	printf("%s\n",line);
-	for(current=list;current;current=current->next,printed_lines++)
+	if(have_default)
 	{
-		if((int)current->even)
-			printf("%1$*2$s|%1$*4$s%3$s%1$*5$s|\n"," ",startx,current->name,current->xoffset,current->xoffset - 5);
-		else
-			printf("%1$*2$s|%1$*4$s%3$s%1$*4$s|\n"," ",startx,current->name,current->xoffset);
+		printf("%c) boot the default config\n",MENU_DEFAULT);
+		printed_lines++;
 	}
+	printf("%c) reboot\n",MENU_REBOOT);
+	printf("%c) poweroff\n",MENU_HALT);
+	printf("%c) reboot recovery\n",MENU_RECOVERY);
+#ifdef SHELL
+	printf("%c) emergency shell\n",MENU_SHELL);
+	printed_lines++;
+#endif
+	printf("   ------------------\n");
+	for(printed_lines+=4,current=list;current;current=current->next,printed_lines++)
+		printf("%u) %s\n",current->id,current->name);
 }
 
-void get_term_size(int *x, int*y)
-{
-	struct winsize term;
-
-	ioctl(STDOUT_FILENO, TIOCGWINSZ,&term);
-	*x = term.ws_col;
-	*y = term.ws_row;
-}
-
-int compute_screen_data(menu_entry *list)
-{
-	int x,y,i,def_entries_num;
-	menu_entry *current;
-	
-	def_entries_num = sizeof(def_entries) / sizeof(def_entries[0]);
-
-	get_term_size(&x,&y);
-	menu_width = (x * MENU_WIDTH_PERC) / 100;
-	startx = ((x - menu_width)/2);
-	line = malloc((startx+menu_width+2)*sizeof(char));
-	if(!line)
-	{
-		FATAL("malloc - %s\n",strerror(errno));
-		return -1;
-	}
-	// build line
-	// <-----------screen width---------->
-	// "         +--------------+\n       "
-	// <-startx->|<-menu_width->|
-	memset(line,' ',startx);
-	line[startx] = '+';
-	memset((line+startx+1),'-',menu_width);
-	line[startx+menu_width] = '+';
-	line[startx+menu_width+1] = '\n';
-	//compute default entries offsets
-	for(i=0;i<def_entries_num;i++)
-		def_offsets[i] = ((menu_width - strlen(def_entries[i]))/2);
-	//compute user entries offsets
-	// use i as temporary variable
-	for(current=list;current;current=current->next)
-	{
-		i = strlen(current->name);
-		current->xoffset = ((menu_width - i)/2);
-		if(i%2) // odd
-			current->even = (unsigned char)0;
-		else
-			current->even = (unsigned char)1;
-	}
-	return 0;
-}
-/*
-void print_menu2(menu_entry *list)
-{
-	menu_entry *current;
-
-	// clear screen
-	for(;printed_lines;printed_lines--)
-		printf("\033[A\033[2K"); // go UP and CLEAR line ( see VT100 reference )
-	rewind(stdout);
-	ftruncate(1,0);
-}
-*/
 void clear_screen(void)
 {
 	for(;printed_lines;printed_lines--)

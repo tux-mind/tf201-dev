@@ -11,7 +11,7 @@
 #include <ctype.h>
 #include <zlib.h>
 
-#include "common.h"
+#include "common2.h"
 
 char *zlib_decompress_file(const char *filename, off_t *r_size)
 {

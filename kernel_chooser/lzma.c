@@ -12,7 +12,7 @@
 #include <ctype.h>
 #include <lzma.h>
 
-#include "common.h"
+#include "common2.h"
 
 #define kBufferSize (1 << 15)
 
