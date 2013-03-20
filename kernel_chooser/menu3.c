@@ -9,7 +9,16 @@
 #include "menu3.h"
 #include "common2.h"
 
-int printed_lines,have_default;
+int printed_lines, // deprecated
+	have_default, // deprecated
+	entries_count; // count of created entries ( useful for error handling )
+ITEM **items; // ncurses menu items
+MENU *menu; // ncurses menu
+WINDOW 	*menu_window, // ncurses menu window
+		*messages_win; // ncurses messages window
+char 	**local_entries, // our padded copy of the items names
+		*message_buffer; // buffer for to-push messages
+
 
 void free_entry(menu_entry *item)
 {
@@ -98,31 +107,48 @@ int copy_with_padd(char **dest, int sizex, char *src)
 	return 0;
 }
 
-int nc_get_user_choice(menu_entry *list)
+int nc_init(void)
 {
-	ITEM **my_items;
-	int c;
-	MENU *my_menu;
-	WINDOW *my_menu_win;
-	int n_choices, i, sizey, sizex, selected_id,default_count;
-	menu_entry *current;
-	char **local_entries,*current_name;
-
 	/* Initialize variables to free in case of errors */
-	my_menu = NULL;
-	my_menu_win = NULL;
-	my_items = NULL;
+	menu = NULL;
+	menu_window = NULL;
+	items = NULL;
 	local_entries = NULL;
-	i=selected_id=0;
 
 	/* Initialize curses */
-	initscr();
+	initscr(); // TODO: error checking
 	start_color();
 	cbreak();
 	noecho();
 	keypad(stdscr, TRUE);
 	init_pair(1, COLOR_RED, COLOR_BLACK);
 	init_pair(2, COLOR_CYAN, COLOR_BLACK);
+	message_buffer = malloc(MAX_BUFF*sizeof(char));
+	return 0;
+}
+
+void nc_destroy(void)
+{
+	unpost_menu(menu);
+	free_menu(menu);
+	delwin(menu_window);
+	if(items[entries_count]) // items are NULL-terminated
+		free_item(items[entries_count]);
+	while(entries_count--)
+	{
+		free(local_entries[entries_count]);
+		free_item(items[entries_count]);
+	}
+	free(items);
+	free(local_entries);
+	clear();
+	endwin();
+}
+
+int nc_compute_menu(menu_entry *list)
+{
+	int n_choices, sizey, sizex, default_count;
+	menu_entry *current;
 
 	/* Compute menu size */
 	sizey = (LINES * MENU_HEIGHT_PERC)/100;
@@ -135,76 +161,92 @@ int nc_get_user_choice(menu_entry *list)
 	default_count = (sizeof(default_entries) / sizeof(default_entries[0])) ;
 	// sum
 	n_choices+= default_count;
-	my_items = (ITEM **)malloc((n_choices+1)*sizeof(ITEM *));
+	items = (ITEM **)malloc((n_choices+1)*sizeof(ITEM *));
 	local_entries = malloc((n_choices+1)*sizeof(char *));
-	if(!my_items || !local_entries)
+	if(!items || !local_entries)
 		goto error;
 	// create default entries
-	for(i=0;i<default_count;i++)
-		if(copy_with_padd(local_entries+i,sizex,(char*)default_entries[i].name))
+	for(entries_count=0;entries_count<default_count;entries_count++)
+		if(copy_with_padd(local_entries+entries_count,sizex,(char*)default_entries[entries_count].name))
 			goto error;
 		else
 		{
 			// HACK: store src pointer in item description
-			my_items[i] = new_item(local_entries[i], default_entries[i].name);
-			if(!my_items[i])
+			items[entries_count] = new_item(local_entries[entries_count], default_entries[entries_count].name);
+			if(!items[entries_count])
 			{
-				free(local_entries[i]);
+				free(local_entries[entries_count]);
 				goto error;
 			}
 		}
-	for(current=list;current;current=current->next,i++)
-		if(copy_with_padd(local_entries+i,sizex,current->name))
+	for(current=list;current;current=current->next,entries_count++)
+		if(copy_with_padd(local_entries+entries_count,sizex,current->name))
 			goto error;
 		else
 		{
 			// HACK: store src pointer in item description
-			my_items[i] = new_item(local_entries[i], current->name);
-			if(!my_items[i])
+			items[entries_count] = new_item(local_entries[entries_count], current->name);
+			if(!items[entries_count])
 			{
-				free(local_entries[i]);
+				free(local_entries[entries_count]);
 				goto error;
 			}
 		}
-	my_items[i] = new_item(NULL,NULL);
+	items[entries_count] = new_item(NULL,NULL);
 	/* Create menu */
-	my_menu = new_menu((ITEM **)my_items);
-	if(!my_menu)
+	menu = new_menu((ITEM **)items);
+	if(!menu)
 		goto error;
 	/* Set menu option not to show the description */
-	menu_opts_off(my_menu, O_SHOWDESC);
+	menu_opts_off(menu, O_SHOWDESC);
 
 	/* Create the window to be associated with the menu */
-	my_menu_win = newwin( sizey, sizex, (LINES-sizey)/2, (COLS-sizex)/2);
-	if(!my_menu_win)
+	menu_window = newwin( sizey, sizex, (LINES-sizey)/2, (COLS-sizex)/2);
+	if(!menu_window)
 		goto error;
 
-	keypad(my_menu_win, TRUE);
+	keypad(menu_window, TRUE);
 
 	/* Set main window and sub window */
-	if(set_menu_win(my_menu, my_menu_win)==ERR)
+	if(set_menu_win(menu, menu_window)==ERR)
 		goto error;
-	if(set_menu_sub(my_menu, derwin(my_menu_win, sizey-3, sizex -2, 3, 1)) != E_OK)
+	if(set_menu_sub(menu, derwin(menu_window, sizey-3, sizex -2, 3, 1)) != E_OK)
 		goto error;
 	// set menu size ( maxY = sizey -3, columns = 1 )
-	if(set_menu_format(my_menu, sizey-3,1) != E_OK)
+	if(set_menu_format(menu, sizey-3,1) != E_OK)
 		goto error;
 
 	/* Set menu mark to the string " * " */
-	if(set_menu_mark(my_menu, NULL)!= E_OK)
+	if(set_menu_mark(menu, NULL)!= E_OK)
 		goto error;
+	return 0;
+	error:
+	nc_destroy();
+	return -1;
+}
+
+int nc_get_user_choice(menu_entry *list)
+{
+	int c,sizex,sizey,selected_id,n_choices,default_count;
+	menu_entry *current;
+	char *current_name;
+	
+	getmaxyx(menu_window,sizex,sizey);
+	
+	default_count = (sizeof(default_entries) / sizeof(default_entries[0]));
+	
 	/* Print a border around the main window and print a title */
-	box(my_menu_win, 0, 0); // TODO: no error check here, manpage is not clear
-	print_in_middle(my_menu_win, 1, 0, sizex, "kernel_chooser", COLOR_PAIR(1));
-	if(mvwaddch(my_menu_win, 2, 0, ACS_LTEE)==ERR)
+	box(menu_window, 0, 0); // TODO: no error check here, manpage is not clear
+	print_in_middle(menu_window, 1, 0, sizex, "kernel_chooser", COLOR_PAIR(1));
+	if(mvwaddch(menu_window, 2, 0, ACS_LTEE)==ERR)
 		goto error;
-	mvwhline(my_menu_win, 2, 1, ACS_HLINE, sizex-2); // TODO: same as box()
-	if(mvwaddch(my_menu_win, 2, sizex-1, ACS_RTEE)==ERR)
+	mvwhline(menu_window, 2, 1, ACS_HLINE, sizex-2); // TODO: same as box()
+	if(mvwaddch(menu_window, 2, sizex-1, ACS_RTEE)==ERR)
 		goto error;
 	/* Post the menu */
-	if(post_menu(my_menu)!=E_OK)
+	if(post_menu(menu)!=E_OK)
 		goto error;
-	wrefresh(my_menu_win);
+	wrefresh(menu_window);
 
 	attron(COLOR_PAIR(2));
 	mvprintw(LINES - 2, 0, "Use PageUp and PageDown to scoll down or up a page of items");
@@ -212,28 +254,28 @@ int nc_get_user_choice(menu_entry *list)
 	attroff(COLOR_PAIR(2));
 	refresh();
 
-	while((c = wgetch(my_menu_win)) != 10)
+	while((c = wgetch(menu_window)) != 10)
 	{
 		switch(c)
 		{
 			case 278:
 			case KEY_DOWN:
-				menu_driver(my_menu, REQ_DOWN_ITEM);
+				menu_driver(menu, REQ_DOWN_ITEM);
 				break;
 			//case KEY_VOLUMEUP: TODO
 			case KEY_UP:
-				menu_driver(my_menu, REQ_UP_ITEM);
+				menu_driver(menu, REQ_UP_ITEM);
 				break;
 			case KEY_NPAGE:
-				menu_driver(my_menu, REQ_SCR_DPAGE);
+				menu_driver(menu, REQ_SCR_DPAGE);
 				break;
 			case KEY_PPAGE:
-				menu_driver(my_menu, REQ_SCR_UPAGE);
+				menu_driver(menu, REQ_SCR_UPAGE);
 				break;
 		}
-		wrefresh(my_menu_win);
+		wrefresh(menu_window);
 	}
-	current_name = (char*)item_description(current_item(my_menu));
+	current_name = (char*)item_description(current_item(menu));
 	for(current=list;current && current->name != current_name;current=current->next);
 	if(current)
 		selected_id = current->id;
@@ -241,25 +283,15 @@ int nc_get_user_choice(menu_entry *list)
 	for(n_choices=0;!selected_id && n_choices<default_count;n_choices++)
 		if(default_entries[n_choices].name == current_name)
 			selected_id = default_entries[n_choices].num;
-	/* Unpost and free all the memory taken up */
-	error:
-	unpost_menu(my_menu);
-	free_menu(my_menu);
-	delwin(my_menu_win);
-	if(my_items[i]) // items are NULL-terminated
-		free_item(my_items[i]);
-	while(i--) // i contains the umber of allocated items
-	{
-		free(local_entries[i]);
-		free_item(my_items[i]);
-	}
-	free(my_items);
-	free(local_entries);
-	clear();
-	endwin();
 	if(selected_id)
 		return selected_id;
+	error:
 	return MENU_FATAL_ERROR;
+}
+
+void nc_push_message(char *msg)
+{
+	mvprintw(0,0,"%s",msg);
 }
 
 void free_list(menu_entry *list)

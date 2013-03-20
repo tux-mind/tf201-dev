@@ -589,6 +589,9 @@ int main(int argc, char **argv, char **envp)
 		goto error;
 	}
 	umount("/sys");
+	if(nc_init())
+		goto error;
+	
 	// init printed_lines counter, fatal error flag and default entry flag
 	fatal_error=printed_lines=have_default=0;
 	printf(HEADER);
@@ -709,6 +712,7 @@ skip_menu:
 	press_enter();
 	#endif
 	free_list(list);
+	nc_destroy();
 	if(!fork())
 	{
 		k_exec(); // bye bye
@@ -716,9 +720,9 @@ skip_menu:
 	}
 	wait(NULL); // should not return on success
 	take_console_control();
-	FATAL("failed to kexec\n"); // we cannot go back, already freed everything...
+	/*FATAL("failed to kexec\n"); // we cannot go back, already freed everything...
 	FATAL("this is horrible!\n");
-	FATAL("please provide a full bug report to developers\n");
+	FATAL("please provide a full bug report to developers\n");*/
 	press_enter();
 	exit(EXIT_FAILURE); // kernel panic here
 
@@ -727,6 +731,7 @@ error:
 	if(!fatal_error)
 		goto menu_prompt;
 	free_list(list);
+	nc_destroy();
 	umount("/proc");
 	exit(EXIT_FAILURE);
 }
