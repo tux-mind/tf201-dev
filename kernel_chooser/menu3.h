@@ -31,9 +31,11 @@ typedef struct _menu_entry
 
 void free_entry(menu_entry *);
 void free_list(menu_entry *);
-//void print_menu(menu_entry *);
+int nc_compute_menu(menu_entry *list);
+int nc_init(void);
+void nc_destroy(void);
 void clear_screen(void);
-int nc_get_user_choice(menu_entry *);
+int nc_get_user_choice(menu_entry *list);
 menu_entry *add_entry(menu_entry *, char *, char *,char *, char *, char *);
 menu_entry *del_entry(menu_entry *, menu_entry *);
 menu_entry *get_item_by_id(menu_entry *, int);
