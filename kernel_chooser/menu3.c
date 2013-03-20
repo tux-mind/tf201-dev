@@ -5,6 +5,7 @@
 #include <string.h>
 #include <curses.h>
 #include <menu.h>
+//#include <stdarg.h>
 
 #include "menu3.h"
 #include "common2.h"
@@ -16,8 +17,7 @@ ITEM **items; // ncurses menu items
 MENU *menu; // ncurses menu
 WINDOW 	*menu_window, // ncurses menu window
 		*messages_win; // ncurses messages window
-char 	**local_entries, // our padded copy of the items names
-		*message_buffer; // buffer for to-push messages
+char 	**local_entries; // our padded copy of the items names
 
 
 void free_entry(menu_entry *item)
@@ -123,7 +123,7 @@ int nc_init(void)
 	keypad(stdscr, TRUE);
 	init_pair(1, COLOR_RED, COLOR_BLACK);
 	init_pair(2, COLOR_CYAN, COLOR_BLACK);
-	message_buffer = malloc(MAX_BUFF*sizeof(char));
+	messages_win = newwin(5,80,46,0);
 	return 0;
 }
 
@@ -132,6 +132,7 @@ void nc_destroy(void)
 	unpost_menu(menu);
 	free_menu(menu);
 	delwin(menu_window);
+	delwin(messages_win);
 	if(items[entries_count]) // items are NULL-terminated
 		free_item(items[entries_count]);
 	while(entries_count--)
@@ -288,10 +289,14 @@ int nc_get_user_choice(menu_entry *list)
 	error:
 	return MENU_FATAL_ERROR;
 }
-
-void nc_push_message(char *msg)
+void nc_push_message(char *fmt,...)
 {
-	mvprintw(0,0,"%s",msg);
+	va_list ap;
+	
+	va_start(ap,fmt);
+	vwprintw(messages_win,fmt,ap);
+	va_end(ap);
+	refresh();
 }
 
 void free_list(menu_entry *list)

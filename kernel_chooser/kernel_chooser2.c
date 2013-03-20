@@ -628,6 +628,8 @@ int main(int argc, char **argv, char **envp)
 	// ( >1 because INFO(mounting data) is not useful )
 	for(item=list;item;item=item->next)
 		DEBUG("%s\n",item->name);
+	if(nc_compute_menu(list))
+		goto error; // TODO: fatal error here.
 
 	if(printed_lines>1)
 		press_enter();
