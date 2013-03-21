@@ -18,8 +18,25 @@
 #define MSG_WIDTH_PERC 100
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
+#define WAIT_MESSAGE "Automatic boot in %2d..."
+#define TIMEOUT_BOOT 10 /* time to wait for the user to press a key */
+
+#define HEADER 	\
+{\
+	"                      kernel_chooser - version 2                           ",\
+	"                  Open Source rocks! - tux_mind <massimo.dragano@gmail.com>",\
+	"                                     - smasher816 <smasher816@gmail.com>   ",\
+	NULL\
+}
+
+#define PROMPT "choose an option"
+
+
 int nc_compute_menu(menu_entry *list);
 int nc_init(void);
 void nc_destroy(void);
+void nc_destroy_menu(void);
 void nc_wait_enter(void);
 int nc_get_user_choice(menu_entry *list);
+void nc_print_header(void);
+int nc_wait_for_keypress(void);

@@ -1,5 +1,5 @@
 // enable various options such as debug statements and extra pauses.
-#define DEVELOPMENT
+//#define DEVELOPMENT
 
 /* taken from http://www.termsys.demon.co.uk/vtansi.htm */
 #define VT_RESET			0
@@ -39,13 +39,7 @@
 #else
 #define DEBUG(x,args...)
 #endif
-/*
-#define FATAL(x,args...)	do{snprintf(message_buffer,MAX_BUFF,"[FATAL]"x,##args);nc_push_message(message_buffer);}while(0)
-#define ERROR(x,args...)	do{snprintf(message_buffer,MAX_BUFF,"[ERROR]"x,##args);nc_push_message(message_buffer);}while(0)
-#define WARN(x,args...)		do{snprintf(message_buffer,MAX_BUFF,"[WARN ]"x,##args);nc_push_message(message_buffer);}while(0)
-#define INFO(x,args...)		do{snprintf(message_buffer,MAX_BUFF,"[INFO ]"x,##args);nc_push_message(message_buffer);}while(0)
-#define DEBUG(x,args...)	do{snprintf(message_buffer,MAX_BUFF,"[DEBUG]"x,##args);nc_push_message(message_buffer);}while(0)
-*/
+
 #define MAX_LINE 255
 #define COMMAND_LINE_SIZE    1024
 

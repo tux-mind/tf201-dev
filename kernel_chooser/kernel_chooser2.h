@@ -1,8 +1,7 @@
 #define NEWROOT "/mnt/"
 #define NEWROOT_STRLEN 5
 #define BUSYBOX "/bin/busybox"
-#define TIMEOUT 5 /* time to wait for external block devices ( USB stick ) or console */
-#define TIMEOUT_BOOT 10 /* time to wait for the user to press a key */
+#define TIMEOUT_BLKDEV 5 /* time to wait for external block devices ( USB stick ) or console */
 
 #if NEWROOT_STRLEN > MAX_LINE
  #error "NEWROOT_STRLEN must be shorter then MAX_LINE"
@@ -23,11 +22,27 @@
 // maximum length for a boot entry name
 #define MAX_NAME 120
 
-#define HEADER 	"kernel_chooser - version 1\n"\
-				"say THANKS to the 4 penguins!\n"\
-				"Open Source rocks! - tux_mind <massimo.dragano@gmail.com>\n"\
-				"                   - smasher816 <smasher816@gmail.com>\n\n"
-
 // from kexec.c
 int k_load(char *,char *,char *);
 void k_exec(void);
+// from nGUI.c
+int nc_compute_menu(menu_entry *list);
+int nc_init(void);
+void nc_destroy(void);
+void nc_wait_enter(void);
+int nc_get_user_choice(menu_entry *list);
+void nc_print_header(void);
+int nc_wait_for_keypress(void);
+void nc_destroy_menu(void);
+// from nGUI.h
+/* our functions return integers
+ * i known that a char it's an int value,
+ * but user can have an entry ID which have the same value of a char.
+ * so i decided to use negative numbers for special entries.
+ */
+#define MENU_REBOOT		-1
+#define MENU_HALT 		-2
+#define MENU_RECOVERY	-3
+#define MENU_SHELL		-4
+#define MENU_DEFAULT	-5
+#define MENU_FATAL_ERROR	-6

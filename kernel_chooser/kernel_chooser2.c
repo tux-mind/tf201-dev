@@ -46,7 +46,6 @@
 
 #include "common2.h"
 #include "menu3.h"
-#include "nGUI.h"
 #include "kernel_chooser2.h"
 
 // if == 1 => someone called FATAL we have to exit
@@ -361,12 +360,12 @@ int open_console(void)
 	if(access(CONSOLE,R_OK|W_OK))
 	{ // no console yet... wait until timeout
 		sleep(1);
-		for(i=1;access(CONSOLE,R_OK|W_OK) && i < TIMEOUT;i++)
+		for(i=1;access(CONSOLE,R_OK|W_OK) && i < TIMEOUT_BLKDEV;i++)
 		{
 			sleep(1);
 			mdev();
 		}
-		if(i==TIMEOUT) // no console availbale ( user it's using an older kernel )
+		if(i==TIMEOUT_BLKDEV) // no console availbale ( user it's using an older kernel )
 		{
 			errno = ETIMEDOUT;
 			return -1;
@@ -402,85 +401,6 @@ void press_enter(void)
 	nc_wait_enter();
 }
 
-int wait_for_keypress(void)
-{
-	int stat,timeout;
-	pid_t pid,wpid;
-
-	timeout = TIMEOUT_BOOT;
-
-	if((pid = fork()))
-	{
-    do
-		{
-			wpid = waitpid(pid, &stat, WNOHANG);
-			if(!wpid)
-			{
-					printf("\r\033[1KAutomatic boot in %2u seconds...", timeout); // rewrite the line every second
-					fflush(stdout);
-					timeout--;
-					sleep(1);
-			}
-    } while (wpid == 0 && timeout);
-		if(wpid== 0 || !timeout || !WIFEXITED(stat))
-		{
-			if(!wpid)
-				kill(pid, SIGKILL);
-			stat = MENU_DEFAULT; // no keypress
-		}
-		else
-			stat = WEXITSTATUS(stat);
-		printf("\r\033[2K");
-		return stat;
-	}
-	else if(pid < 0)
-	{
-		FATAL("cannot fork - %s\n",strerror(errno));
-		return 0;
-	}
-	else
-	{
-		exit( getch() );
-		return 0; /* not reached */
-	}
-}
-/*
-int get_user_choice(void)
-{
-	int i;
-	char buff[MAX_LINE];
-
-	printf("enter a number and press <ENTER>: ");
-
-	fgets(buff,MAX_LINE,stdin);
-	fgets_fix(buff);
-	for(i=0;i<MAX_LINE && buff[i] != '\0' && isspace(buff[i]);i++);
-	switch(buff[i])
-	{
-		case MENU_DEFAULT:
-			i = MENU_DEFAULT_NUM;
-			break;
-		case MENU_REBOOT:
-			i = MENU_REBOOT_NUM;
-			break;
-		case MENU_HALT:
-			i=MENU_HALT_NUM;
-			break;
-		case MENU_RECOVERY:
-			i=MENU_RECOVERY_NUM;
-			break;
-#ifdef SHELL
-		case MENU_SHELL:
-			i=MENU_SHELL_NUM;
-			break;
-#endif
-		default:
-			i = atoi(buff);
-	}
-	printed_lines++; // user press enter
-	return i;
-}
-*/
 int parse_data_directory(menu_entry **list)
 {
 	DIR *dir;
@@ -527,13 +447,13 @@ int wait_for_device(char *blkdev)
 		INFO("waiting for device...\n");
 		sleep(1);
 		mdev();
-		for(i=1;access(blkdev,R_OK) && i < TIMEOUT;i++)
+		for(i=1;access(blkdev,R_OK) && i < TIMEOUT_BLKDEV;i++)
 		{
 			sleep(1);
 			mdev();
 		}
 		umount("/sys");
-		if(i==TIMEOUT)
+		if(i==TIMEOUT_BLKDEV)
 			return -1;
 	}
 	return 0;
@@ -573,11 +493,11 @@ void shell(void)
 
 int main(int argc, char **argv, char **envp)
 {
-	int i;
+	int i,data_dir_to_parse;
 	menu_entry *list=NULL,*item;
 
 	// errors before open_console are fatal
-	fatal_error = 1;
+	fatal_error = data_dir_to_parse = 1;
 
 	// mount sys
 	if(mount("sysfs","/sys","sysfs",MS_RELATIME,""))
@@ -591,9 +511,8 @@ int main(int argc, char **argv, char **envp)
 	umount("/sys");
 	if(nc_init())
 		goto error;
-
-	// init printed_lines counter, fatal error flag and default entry flag
-	//printf(HEADER); TODO: nc_print_header()
+	nc_print_header();
+	INFO("mounting /proc\n");
 	// mount proc ( required by kexec )
 	if(mount("proc","/proc","proc",MS_RELATIME,""))
 	{
@@ -601,7 +520,6 @@ int main(int argc, char **argv, char **envp)
 		goto error;
 	}
 	INFO("mounting /data\n");
-	sleep(2);
 	// mount DATA_DEV partition into /data
 	if(mount(DATA_DEV,"/data","ext4",0,""))
 	{
@@ -614,37 +532,41 @@ int main(int argc, char **argv, char **envp)
 		umount("/data");
 		goto error;
 	}
+	fatal_error=0;
+
+	if(list)
+	{
+		INFO("found a default config\n");
+		if(nc_wait_for_keypress())
+		{
+			i=MENU_DEFAULT;
+			goto skip_menu;
+		}
+	}
 	else
 		INFO("no default config found\n");
 
-	/* TODO: do the nc_waiting_for_keypress function
-	 * NOTE: if(list) => we have a default entry
-	// automatically boot in TIMEOUT_BOOT seconds
-	if (have_default && ((i=wait_for_keypress()) == MENU_DEFAULT))
-		goto skip_menu; // automatic boot, we don't need to parse the data directory.
-	*/
-
-	if(parse_data_directory(&list))
-	{
-		umount("/data");
-		goto error;
-	}
-	umount("/data");
-	if(nc_compute_menu(list))
-		goto error;
-
-	// now we have all data. ( NOTE: 'i' contains the pressed key if needed )
-
-	/* we restart from here in case of not fatal errors */
-	fatal_error=0;
-
 menu_prompt:
-	//print_menu(list);
+	if(data_dir_to_parse)
+	{
+		INFO("parsing data directory\n");
+		data_dir_to_parse=0;
+		if(parse_data_directory(&list))
+		{
+			umount("/data");
+			goto error;
+		}
+		umount("/data");
+		if(nc_compute_menu(list))
+			goto error;
+	}
 	i=nc_get_user_choice(list);
 	//take_console_control();
-//skip_menu:
+skip_menu:
 	DEBUG("user chose %d\n",i);
+#ifdef DEVELOPMENT
 	press_enter();
+#endif
 	// decide what to do
 	switch (i)
 	{
@@ -671,7 +593,18 @@ menu_prompt:
 			goto error;
 #ifdef SHELL
 		case MENU_SHELL:
+			if(!data_dir_to_parse)
+			{
+				//remount data ( no error check, we are debugging here )
+				mount(DATA_DEV,"/data","ext4",0,"");
+				nc_destroy_menu();
+			}
+			free_list(list);
+			nc_destroy();
+			data_dir_to_parse=1;
 			shell();
+			parser(DEFAULT_CONFIG,"default",&list);
+			nc_init();
 			goto menu_prompt;
 #endif
 		default: // parsed config
@@ -700,6 +633,8 @@ menu_prompt:
 		goto error;
 	}
 	umount(NEWROOT);
+	if(data_dir_to_parse)
+		umount("/data");
 	DEBUG("kernel = \"%s\"\n",item->kernel);
 	DEBUG("initrd = \"%s\"\n",item->initrd);
 	DEBUG("cmdline = \"%s\"\n",item->cmdline);
@@ -711,6 +646,8 @@ menu_prompt:
 	press_enter();
 	#endif
 	free_list(list);
+	if(!data_dir_to_parse)
+		nc_destroy_menu();
 	nc_destroy();
 	umount("/proc");
 	if(!fork())
@@ -720,9 +657,6 @@ menu_prompt:
 	}
 	wait(NULL); // should not return on success
 	take_console_control();
-	/*FATAL("failed to kexec\n"); // we cannot go back, already freed everything...even the screen
-	FATAL("this is horrible!\n");
-	FATAL("please provide a full bug report to developers\n");*/
 	//make sure that user read this
 	for(i=0;i<50;i++)
 		printf("01001000\n01000101\n01001100\n01010000\n\n\n"); // "HELP" lol
@@ -733,6 +667,10 @@ error:
 	press_enter();
 	if(!fatal_error)
 		goto menu_prompt;
+	if(data_dir_to_parse)
+		umount("/data");
+	else
+		nc_destroy_menu();
 	free_list(list);
 	nc_destroy();
 	umount("/proc");

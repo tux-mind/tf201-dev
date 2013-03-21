@@ -1,11 +1,10 @@
-get alsa work without pulseaudio, for now sound works only with pulseaudio. (fixed with asound.conf?)
 make UI application for boot_chooser. (Android app in progress by Smasher816)
 check for abootimg, fastboot and blobpack executable in scripts.
 parse EXT4 magic bytes in try_loop_mount (done?)
 
-Move to a more graphical root_chooser initrd (ncurses)
 Update documention to reflect the many recent changes.
-Bug squashing.
 root_chooser: have to free() all from forked childs ( like shell and mdev ). i known that linux should free() on exit() but i'm paranoi, you known! :)
 remove unused folders from initramfs
 add support for fat filesystems
+
+kernel_chooser: move default options to a second menu printed only if a specific key being pressed.
