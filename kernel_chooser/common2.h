@@ -29,12 +29,12 @@
 #define BG_WHITE		47
 
 // print helpers
-#define FATAL(x,args...)	do{nc_push_message("\033[%d;%d;%dm[FATAL]\033[0m "x,VT_BLINK,BG_BLACK,FG_RED,##args);printed_lines++;fatal_error=1;}while(0)
-#define ERROR(x,args...) 	do{nc_push_message("\033[%d;%d;%dm[ERROR]\033[0m "x,VT_BRIGHT,BG_BLACK,FG_RED,##args);printed_lines++;}while(0)
-#define WARN(x,args...)		do{nc_push_message("\033[%d;%dm[WARN ]\033[0m "x,BG_BLACK,FG_YELLOW,##args);printed_lines++;}while(0)
-#define INFO(x,args...)		do{nc_push_message("\033[%d;%dm[INFO ]\033[0m "x,BG_BLACK,FG_GREEN,##args);printed_lines++;}while(0)
+#define FATAL(x,args...)	do{nc_push_message("[FATAL] "x,##args);printed_lines++;fatal_error=1;}while(0)
+#define ERROR(x,args...) 	do{nc_push_message("[ERROR] "x,##args);printed_lines++;}while(0)
+#define WARN(x,args...)		do{nc_push_message("[WARN ] "x,##args);printed_lines++;}while(0)
+#define INFO(x,args...)		do{nc_push_message("[INFO ] "x,##args);printed_lines++;}while(0)
 #ifdef DEVELOPMENT
-#define DEBUG(x,args...) 	do{nc_push_message("\033[%d;%d;%dm[DEBUG]\033[0m "x,VT_BRIGHT,BG_BLACK,FG_MAGENTA,##args);printed_lines++;}while(0)
+#define DEBUG(x,args...) 	do{nc_push_message("[DEBUG] "x,##args);printed_lines++;}while(0)
 #define SHELL // allow the user to drop into a shell provided by busybox
 #else
 #define DEBUG(x,args...)

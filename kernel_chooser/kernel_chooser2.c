@@ -397,9 +397,8 @@ char getch()
 
 void press_enter(void)
 {
-	char garbage[MAX_LINE];
-	INFO("press <ENTER> to continue..."); // the last "\n" is added by the user
-	fgets(garbage,MAX_LINE,stdin);
+	INFO("press <ENTER> to continue...\n");
+	nc_wait_enter();
 }
 
 int wait_for_keypress(void)
@@ -591,10 +590,9 @@ int main(int argc, char **argv, char **envp)
 	umount("/sys");
 	if(nc_init())
 		goto error;
-	
+
 	// init printed_lines counter, fatal error flag and default entry flag
-	fatal_error=printed_lines=have_default=0;
-	printf(HEADER);
+	//printf(HEADER); TODO: nc_print_header()
 	// mount proc ( required by kexec )
 	if(mount("proc","/proc","proc",MS_RELATIME,""))
 	{
@@ -614,38 +612,35 @@ int main(int argc, char **argv, char **envp)
 		umount("/data");
 		goto error;
 	}
-	if(list)
-		have_default=1;
 	else
 		INFO("no default config found\n");
+
+	/* TODO: do the nc_waiting_for_keypress function
+	 * NOTE: if(list) => we have a default entry
+	// automatically boot in TIMEOUT_BOOT seconds
+	if (have_default && ((i=wait_for_keypress()) == MENU_DEFAULT))
+		goto skip_menu; // automatic boot, we don't need to parse the data directory.
+	*/
+
 	if(parse_data_directory(&list))
 	{
 		umount("/data");
 		goto error;
 	}
 	umount("/data");
-	// we have printed something, give user time to read
-	// ( >1 because INFO(mounting data) is not useful )
-	for(item=list;item;item=item->next)
-		DEBUG("%s\n",item->name);
 	if(nc_compute_menu(list))
-		goto error; // TODO: fatal error here.
-
-	if(printed_lines>1)
-		press_enter();
-	clear_screen();
-	// automatically boot in TIMEOUT_BOOT seconds
-	if (have_default && ((i=wait_for_keypress()) == MENU_DEFAULT))
-		goto skip_menu; // automatic boot ( no input required )
+		goto error;
 
 	// now we have all data. ( NOTE: 'i' contains the pressed key if needed )
 
 	/* we restart from here in case of not fatal errors */
+	fatal_error=0;
+
 menu_prompt:
 	//print_menu(list);
 	i=nc_get_user_choice(list);
-	take_console_control();
-skip_menu:
+	//take_console_control();
+//skip_menu:
 	DEBUG("user chose %d\n",i);
 	press_enter();
 	// decide what to do
@@ -656,10 +651,10 @@ skip_menu:
 			goto error;
 			break;
 		case MENU_DEFAULT:
-			if(!have_default)
+			if(!list)
 			{
 				WARN("invalid choice\n");
-				goto error;
+				goto error; // user can choose one of the default entries ( like recovery )
 			}
 			item=list;
 			break;
@@ -715,6 +710,7 @@ skip_menu:
 	#endif
 	free_list(list);
 	nc_destroy();
+	umount("/proc");
 	if(!fork())
 	{
 		k_exec(); // bye bye
@@ -722,9 +718,12 @@ skip_menu:
 	}
 	wait(NULL); // should not return on success
 	take_console_control();
-	/*FATAL("failed to kexec\n"); // we cannot go back, already freed everything...
+	/*FATAL("failed to kexec\n"); // we cannot go back, already freed everything...even the screen
 	FATAL("this is horrible!\n");
 	FATAL("please provide a full bug report to developers\n");*/
+	//make sure that user read this
+	for(i=0;i<50;i++)
+		printf("01001000\n01000101\n01001100\n01010000\n\n\n"); // "HELP" lol
 	press_enter();
 	exit(EXIT_FAILURE); // kernel panic here
 

@@ -5,18 +5,19 @@
 #include <string.h>
 #include <curses.h>
 #include <menu.h>
-//#include <stdarg.h>
 
 #include "menu3.h"
 #include "common2.h"
 
 int printed_lines, // deprecated
-	have_default, // deprecated
-	entries_count; // count of created entries ( useful for error handling )
+		have_default, // deprecated
+		menu_sizex, // size fo the menu_window ( getmaxyx does not work )
+		msg_sizey, // same as above
+		entries_count; // count of created entries ( useful for error handling )
 ITEM **items; // ncurses menu items
 MENU *menu; // ncurses menu
 WINDOW 	*menu_window, // ncurses menu window
-		*messages_win; // ncurses messages window
+				*messages_win; // ncurses messages window
 char 	**local_entries; // our padded copy of the items names
 
 
@@ -109,9 +110,11 @@ int copy_with_padd(char **dest, int sizex, char *src)
 
 int nc_init(void)
 {
+	int sizex;
+
 	/* Initialize variables to free in case of errors */
 	menu = NULL;
-	menu_window = NULL;
+	messages_win = menu_window = NULL;
 	items = NULL;
 	local_entries = NULL;
 
@@ -123,7 +126,21 @@ int nc_init(void)
 	keypad(stdscr, TRUE);
 	init_pair(1, COLOR_RED, COLOR_BLACK);
 	init_pair(2, COLOR_CYAN, COLOR_BLACK);
-	messages_win = newwin(5,80,46,0);
+
+	/* Create messages window */
+	msg_sizey = (LINES * MSG_HEIGHT_PERC)/100;
+	sizex = (COLS * MSG_WIDTH_PERC)/100;
+	messages_win = newwin(msg_sizey-2,sizex-2,(LINES-msg_sizey)+1,1);
+	scrollok(messages_win,TRUE);
+
+	mvaddch(LINES-msg_sizey,0,ACS_ULCORNER);
+	mvhline(LINES-msg_sizey,1,ACS_HLINE,sizex-2);
+	mvaddch(LINES-msg_sizey,sizex-1,ACS_URCORNER);
+	mvaddch(LINES-1,0,ACS_LLCORNER);
+	mvhline(LINES-1,1,ACS_HLINE,sizex-2);
+	mvaddch(LINES-1,sizex,ACS_LRCORNER);
+	mvvline(LINES-msg_sizey+1,0,ACS_VLINE,msg_sizey-2);
+	mvvline(LINES-msg_sizey+1,sizex-1,ACS_VLINE,msg_sizey-2);
 	return 0;
 }
 
@@ -148,18 +165,18 @@ void nc_destroy(void)
 
 int nc_compute_menu(menu_entry *list)
 {
-	int n_choices, sizey, sizex, default_count;
+	int n_choices, sizey, default_count;
 	menu_entry *current;
 
 	/* Compute menu size */
 	sizey = (LINES * MENU_HEIGHT_PERC)/100;
-	sizex = (COLS * MENU_WIDTH_PERC)/100;
+	menu_sizex = (COLS * MENU_WIDTH_PERC)/100;
 
 	/* Create items */
 	// count entries
 	for(n_choices=0,current=list;current;current=current->next,n_choices++);
 	// count the default ones
-	default_count = (sizeof(default_entries) / sizeof(default_entries[0])) ;
+	default_count = ARRAY_SIZE(default_entries);
 	// sum
 	n_choices+= default_count;
 	items = (ITEM **)malloc((n_choices+1)*sizeof(ITEM *));
@@ -168,7 +185,7 @@ int nc_compute_menu(menu_entry *list)
 		goto error;
 	// create default entries
 	for(entries_count=0;entries_count<default_count;entries_count++)
-		if(copy_with_padd(local_entries+entries_count,sizex,(char*)default_entries[entries_count].name))
+		if(copy_with_padd(local_entries+entries_count,menu_sizex,(char*)default_entries[entries_count].name))
 			goto error;
 		else
 		{
@@ -181,7 +198,7 @@ int nc_compute_menu(menu_entry *list)
 			}
 		}
 	for(current=list;current;current=current->next,entries_count++)
-		if(copy_with_padd(local_entries+entries_count,sizex,current->name))
+		if(copy_with_padd(local_entries+entries_count,menu_sizex,current->name))
 			goto error;
 		else
 		{
@@ -202,7 +219,7 @@ int nc_compute_menu(menu_entry *list)
 	menu_opts_off(menu, O_SHOWDESC);
 
 	/* Create the window to be associated with the menu */
-	menu_window = newwin( sizey, sizex, (LINES-sizey)/2, (COLS-sizex)/2);
+	menu_window = newwin( sizey, menu_sizex, (LINES-sizey)/2, (COLS-menu_sizex)/2);
 	if(!menu_window)
 		goto error;
 
@@ -211,7 +228,7 @@ int nc_compute_menu(menu_entry *list)
 	/* Set main window and sub window */
 	if(set_menu_win(menu, menu_window)==ERR)
 		goto error;
-	if(set_menu_sub(menu, derwin(menu_window, sizey-3, sizex -2, 3, 1)) != E_OK)
+	if(set_menu_sub(menu, derwin(menu_window, sizey-3, menu_sizex -2, 3, 1)) != E_OK)
 		goto error;
 	// set menu size ( maxY = sizey -3, columns = 1 )
 	if(set_menu_format(menu, sizey-3,1) != E_OK)
@@ -228,32 +245,25 @@ int nc_compute_menu(menu_entry *list)
 
 int nc_get_user_choice(menu_entry *list)
 {
-	int c,sizex,sizey,selected_id,n_choices,default_count;
+	int c,selected_id,n_choices,default_count;
 	menu_entry *current;
 	char *current_name;
-	
-	getmaxyx(menu_window,sizex,sizey);
-	
-	default_count = (sizeof(default_entries) / sizeof(default_entries[0]));
-	
+
+	default_count = ARRAY_SIZE(default_entries);
+
 	/* Print a border around the main window and print a title */
 	box(menu_window, 0, 0); // TODO: no error check here, manpage is not clear
-	print_in_middle(menu_window, 1, 0, sizex, "kernel_chooser", COLOR_PAIR(1));
+	print_in_middle(menu_window, 1, 0, menu_sizex, "kernel_chooser", COLOR_PAIR(1));
 	if(mvwaddch(menu_window, 2, 0, ACS_LTEE)==ERR)
 		goto error;
-	mvwhline(menu_window, 2, 1, ACS_HLINE, sizex-2); // TODO: same as box()
-	if(mvwaddch(menu_window, 2, sizex-1, ACS_RTEE)==ERR)
+	mvwhline(menu_window, 2, 1, ACS_HLINE, menu_sizex-2); // TODO: same as box()
+	if(mvwaddch(menu_window, 2, menu_sizex-1, ACS_RTEE)==ERR)
 		goto error;
 	/* Post the menu */
 	if(post_menu(menu)!=E_OK)
 		goto error;
 	wrefresh(menu_window);
-
-	attron(COLOR_PAIR(2));
-	mvprintw(LINES - 2, 0, "Use PageUp and PageDown to scoll down or up a page of items");
-	mvprintw(LINES - 1, 0, "Arrow Keys to navigate (Enter to select)");
-	attroff(COLOR_PAIR(2));
-	refresh();
+	wrefresh(messages_win);
 
 	while((c = wgetch(menu_window)) != 10)
 	{
@@ -289,14 +299,26 @@ int nc_get_user_choice(menu_entry *list)
 	error:
 	return MENU_FATAL_ERROR;
 }
+
+// TODO: scroll
 void nc_push_message(char *fmt,...)
 {
 	va_list ap;
-	
+
+	if(!messages_win)
+		return;
+
 	va_start(ap,fmt);
 	vwprintw(messages_win,fmt,ap);
+	wrefresh(messages_win);
 	va_end(ap);
 	refresh();
+}
+
+void nc_wait_enter(void)
+{
+	while(getch() != 10)
+		sleep(1); //TODO: use usec
 }
 
 void free_list(menu_entry *list)
