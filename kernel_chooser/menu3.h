@@ -16,6 +16,8 @@
 // percentage of screen used by the menu
 #define MENU_WIDTH_PERC 50
 #define MENU_HEIGHT_PERC 50
+#define MSG_HEIGHT_PERC 25
+#define MSG_WIDTH_PERC 100
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
 typedef struct _menu_entry
@@ -35,6 +37,7 @@ int nc_compute_menu(menu_entry *list);
 int nc_init(void);
 void nc_destroy(void);
 void clear_screen(void);
+void nc_wait_enter(void);
 int nc_get_user_choice(menu_entry *list);
 menu_entry *add_entry(menu_entry *, char *, char *,char *, char *, char *);
 menu_entry *del_entry(menu_entry *, menu_entry *);

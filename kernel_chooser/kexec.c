@@ -1576,8 +1576,6 @@ int k_load(char *kernel,char *initrd,char *cmdline)
 	mem_max = ULONG_MAX;
 	mem_min = 0xA0000000;
 
-	DEBUG("%s\n%s\n%s\n", kernel, initrd, cmdline);
-
 	result = 0;
 	/* slurp in the input kernel */
 	kernel_buf = slurp_decompress_file(kernel, &kernel_size);
