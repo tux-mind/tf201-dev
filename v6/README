@@ -1,0 +1,6 @@
+kernel unchanged.
+root_patches unchanged
+root_chooser unchanged
+kernel_chooser: use ncurses as GUI
+
+programs behaviour and files syntax are unchanged.

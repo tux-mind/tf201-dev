@@ -3,13 +3,15 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <wait.h>
 
 #include "common2.h"
 #include "menu3.h"
 #include "nGUI.h"
 
 int	menu_sizex, // size fo the menu_window ( getmaxyx does not work )
-		msg_sizey, // same as above
+		menu_sizey,
 		entries_count; // count of created entries ( useful for error handling )
 ITEM **items; // ncurses menu items
 MENU *menu; // ncurses menu
@@ -46,7 +48,7 @@ const struct _default_entries default_entries[] =
 #endif
 };
 
-void print_in_middle(WINDOW *win, int starty, int startx, int width, char *string, chtype color)
+void print_in_middle(WINDOW *win, int starty, int startx, int width, char *string)
 {
 	int length, x, y;
 	float temp;
@@ -64,9 +66,7 @@ void print_in_middle(WINDOW *win, int starty, int startx, int width, char *strin
 	length = strlen(string);
 	temp = (width - length)/ 2;
 	x = startx + (int)temp;
-	wattron(win, color);
 	mvwprintw(win, y, x, "%s", string);
-	wattroff(win, color);
 	refresh();
 }
 
@@ -82,7 +82,10 @@ int copy_with_padd(char **dest, int sizex, char *src)
 	len = strlen(src);
 	*dest = malloc((sizex+1)*sizeof(char));
 	if(!*dest)
+	{
+		FATAL("malloc - %s\n",strerror(errno));
 		return -1;
+	}
 	memset(*dest,' ',sizex);
 	strncpy((*dest + ((sizex - len)/2)),src,len);
 	*((*dest)+sizex)='\0';
@@ -91,13 +94,14 @@ int copy_with_padd(char **dest, int sizex, char *src)
 
 int nc_init(void)
 {
-	int sizex;
+	int sizex,sizey;
 
 	/* Initialize variables to free in case of errors */
 	menu = NULL;
 	messages_win = menu_window = NULL;
 	items = NULL;
 	local_entries = NULL;
+	entries_count = 0;
 
 	/* Initialize curses */
 	initscr(); // TODO: error checking
@@ -109,30 +113,31 @@ int nc_init(void)
 	init_pair(2, COLOR_CYAN, COLOR_BLACK);
 
 	/* Create messages window */
-	msg_sizey = (LINES * MSG_HEIGHT_PERC)/100;
+	sizey = (LINES * MSG_HEIGHT_PERC)/100;
 	sizex = (COLS * MSG_WIDTH_PERC)/100;
-	messages_win = newwin(msg_sizey-2,sizex-2,(LINES-msg_sizey)+1,1);
+	messages_win = newwin(sizey-2,sizex-2,(LINES-sizey)+1,1);
 	scrollok(messages_win,TRUE);
 
-	mvaddch(LINES-msg_sizey,0,ACS_ULCORNER);
-	mvhline(LINES-msg_sizey,1,ACS_HLINE,sizex-2);
-	mvaddch(LINES-msg_sizey,sizex-1,ACS_URCORNER);
+	attron(COLOR_PAIR(2));
+	mvaddch(LINES-sizey,0,ACS_ULCORNER);
+	mvhline(LINES-sizey,1,ACS_HLINE,sizex-2);
+	mvaddch(LINES-sizey,sizex-1,ACS_URCORNER);
 	mvaddch(LINES-1,0,ACS_LLCORNER);
 	mvhline(LINES-1,1,ACS_HLINE,sizex-2);
 	mvaddch(LINES-1,sizex-1,ACS_LRCORNER);
-	mvvline(LINES-msg_sizey+1,0,ACS_VLINE,msg_sizey-2);
-	mvvline(LINES-msg_sizey+1,sizex-1,ACS_VLINE,msg_sizey-2);
+	mvvline(LINES-sizey+1,0,ACS_VLINE,sizey-2);
+	mvvline(LINES-sizey+1,sizex-1,ACS_VLINE,sizey-2);
 	wrefresh(messages_win);
 	refresh();
+	attroff(COLOR_PAIR(2));
 	return 0;
 }
 
-void nc_destroy(void)
+void nc_destroy_menu(void)
 {
 	unpost_menu(menu);
 	free_menu(menu);
 	delwin(menu_window);
-	delwin(messages_win);
 	if(items[entries_count]) // items are NULL-terminated
 		free_item(items[entries_count]);
 	while(entries_count--)
@@ -142,18 +147,61 @@ void nc_destroy(void)
 	}
 	free(items);
 	free(local_entries);
+}
+
+void nc_destroy(void)
+{
+	/*delwin(messages_win);
+	 * WARNING: call this function here causes a kernel panic.
+	 * NOTE:DEBUG("messages_win=%p",messages_win) return a valid pointer...
+	 * we have to find why this happens
+	 * NOTE: btw, kernel saying that all memory has freed...strange behaviour.
+	 */
 	clear();
 	endwin();
 }
 
+void draw_menu_border(void)
+{
+	int startx,starty,cur_y,cur_x,len;
+	/* Print a border around the main window and print a title */
+	attron(COLOR_PAIR(1));
+	getbegyx(menu_window,starty,startx);
+	len = strlen(PROMPT);
+	cur_y=starty-1;
+	cur_x=startx;
+	mvhline(cur_y, cur_x, ACS_HLINE, menu_sizex);
+	cur_y-=2;
+	mvhline(cur_y, cur_x, ACS_HLINE, menu_sizex);
+	cur_y=starty+menu_sizey;
+	mvhline(cur_y, cur_x, ACS_HLINE, menu_sizex);
+	mvaddch(cur_y,cur_x-1,ACS_LLCORNER);
+	cur_y = starty-2;
+	cur_x = startx-1;
+	mvvline(cur_y,cur_x, ACS_VLINE, menu_sizey+2);
+	mvprintw(cur_y,cur_x + ((menu_sizex - len)/2),"%s",PROMPT);
+	mvaddch(cur_y-1,cur_x,ACS_ULCORNER);
+	cur_x = startx+menu_sizex;
+	mvvline(cur_y,cur_x, ACS_VLINE, menu_sizey+2);
+	mvaddch(cur_y-1,cur_x,ACS_URCORNER);
+	cur_y=starty+menu_sizey;
+	mvaddch(cur_y,cur_x,ACS_LRCORNER);
+	wrefresh(menu_window);
+	refresh();
+	attroff(COLOR_PAIR(1));
+}
+
 int nc_compute_menu(menu_entry *list)
 {
-	int n_choices, sizey, default_count;
+	int n_choices, default_count;
 	menu_entry *current;
 
 	/* Compute menu size */
-	sizey = (LINES * MENU_HEIGHT_PERC)/100;
+	menu_sizey = (LINES * MENU_HEIGHT_PERC)/100;
 	menu_sizex = (COLS * MENU_WIDTH_PERC)/100;
+
+	menu_sizex-=2; // borders
+	menu_sizey-=5; // borders + head
 
 	/* Create items */
 	// count entries
@@ -165,7 +213,10 @@ int nc_compute_menu(menu_entry *list)
 	items = (ITEM **)malloc((n_choices+1)*sizeof(ITEM *));
 	local_entries = malloc((n_choices+1)*sizeof(char *));
 	if(!items || !local_entries)
+	{
+		FATAL("malloc - %s\n",strerror(errno));
 		goto error;
+	}
 	// create default entries
 	for(entries_count=0;entries_count<default_count;entries_count++)
 		if(copy_with_padd(local_entries+entries_count,menu_sizex,(char*)default_entries[entries_count].name))
@@ -177,6 +228,7 @@ int nc_compute_menu(menu_entry *list)
 			if(!items[entries_count])
 			{
 				free(local_entries[entries_count]);
+				FATAL("new_item - %s\n",strerror(errno));
 				goto error;
 			}
 		}
@@ -190,6 +242,7 @@ int nc_compute_menu(menu_entry *list)
 			if(!items[entries_count])
 			{
 				free(local_entries[entries_count]);
+				FATAL("new_item - %s\n",strerror(errno));
 				goto error;
 			}
 		}
@@ -197,32 +250,42 @@ int nc_compute_menu(menu_entry *list)
 	/* Create menu */
 	menu = new_menu((ITEM **)items);
 	if(!menu)
+	{
+		FATAL("new_menu - %s\n",strerror(errno));
 		goto error;
+	}
 	/* Set menu option not to show the description */
 	menu_opts_off(menu, O_SHOWDESC);
 
 	/* Create the window to be associated with the menu */
-	menu_window = newwin( sizey, menu_sizex, (LINES-sizey)/2, (COLS-menu_sizex)/2);
+	menu_window = newwin( menu_sizey, menu_sizex, (LINES-menu_sizey)/2, (COLS-menu_sizex)/2);
 	if(!menu_window)
+	{
+		FATAL("newwin - %s\n",strerror(errno));
 		goto error;
+	}
 
 	keypad(menu_window, TRUE);
-
+	if(wattron(menu_window,COLOR_PAIR(1))==ERR)
+		ERROR("wattron - %s\n",strerror(errno));
 	/* Set main window and sub window */
 	if(set_menu_win(menu, menu_window)==ERR)
+	{
+		FATAL("set_menu_win - %s\n",strerror(errno));
 		goto error;
-	if(set_menu_sub(menu, derwin(menu_window, sizey-3, menu_sizex -2, 3, 1)) != E_OK)
-		goto error;
-	// set menu size ( maxY = sizey -3, columns = 1 )
-	if(set_menu_format(menu, sizey-3,1) != E_OK)
-		goto error;
+	}
+	// set menu size
+	if(set_menu_format(menu, menu_sizey,1) != E_OK)
+		ERROR("set_menu_format - %s\n",strerror(errno));
 
-	/* Set menu mark to the string " * " */
+	/* Set menu mark  */
 	if(set_menu_mark(menu, NULL)!= E_OK)
-		goto error;
+		ERROR("set_menu_mark - %s\n",strerror(errno));
+
+	draw_menu_border();
 	return 0;
 	error:
-	nc_destroy();
+	nc_destroy_menu();
 	return -1;
 }
 
@@ -234,19 +297,12 @@ int nc_get_user_choice(menu_entry *list)
 
 	default_count = ARRAY_SIZE(default_entries);
 
-	/* Print a border around the main window and print a title */
-	box(menu_window, 0, 0); // TODO: no error check here, manpage is not clear
-	print_in_middle(menu_window, 1, 0, menu_sizex, "kernel_chooser", COLOR_PAIR(1));
-	if(mvwaddch(menu_window, 2, 0, ACS_LTEE)==ERR)
-		goto error;
-	mvwhline(menu_window, 2, 1, ACS_HLINE, menu_sizex-2); // TODO: same as box()
-	if(mvwaddch(menu_window, 2, menu_sizex-1, ACS_RTEE)==ERR)
-		goto error;
 	/* Post the menu */
 	if(post_menu(menu)!=E_OK)
 		goto error;
 	wrefresh(menu_window);
 	wrefresh(messages_win);
+	refresh();
 
 	while((c = wgetch(menu_window)) != 10)
 	{
@@ -299,11 +355,64 @@ void nc_push_message(char *fmt,...)
 
 void nc_wait_enter(void)
 {
-	while(getch() != 10)
-		usleep(100); //TODO: use usec
+	while(getch() != 10);
 }
 
-void nc_wait_for_keypress(void)
+void nc_print_header(void)
 {
-	getch();
+	const char *strings[] = HEADER;
+	int y,x;
+
+	for(y=0;strings[y];y++)
+	{
+		x = (COLS-strlen(strings[y]))/2;
+		mvprintw(y,x,"%s",strings[y]);
+	}
+}
+
+/** wait for a keypress while coutdown.
+ * if user press something return 0.
+ * -1 otherwise
+ */
+int nc_wait_for_keypress(void)
+{
+	int x,y,timeout,stat;
+	pid_t pid,wpid;
+
+	y = (LINES/2)-1;
+	x = (COLS - snprintf(NULL,0,WAIT_MESSAGE,0))/2;
+	timeout = TIMEOUT_BOOT;
+
+	if(!(pid=fork()))
+	{
+		getch();
+		exit(EXIT_SUCCESS);
+	}
+	else if(pid < 0)
+	{
+		FATAL("cannot fork - %s\n",strerror(errno));
+		return -1;
+	}
+	else
+	{
+		do
+		{
+			wpid = waitpid(pid, &stat, WNOHANG);
+			if(!wpid)
+			{
+					mvprintw(y,x,WAIT_MESSAGE, timeout); // rewrite the line every second
+					refresh();
+					timeout--;
+					sleep(1);
+			}
+    } while (wpid == 0 && timeout);
+		if(wpid== 0 || !timeout || !WIFEXITED(stat))
+		{
+			if(!wpid)
+				kill(pid, SIGKILL);
+			return -1;
+		}
+		else
+			return 0;
+	}
 }
