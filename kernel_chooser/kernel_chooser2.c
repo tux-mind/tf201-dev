@@ -46,6 +46,7 @@
 
 #include "common2.h"
 #include "menu3.h"
+#include "nGUI.h"
 #include "kernel_chooser2.h"
 
 // if == 1 => someone called FATAL we have to exit
@@ -600,6 +601,7 @@ int main(int argc, char **argv, char **envp)
 		goto error;
 	}
 	INFO("mounting /data\n");
+	sleep(2);
 	// mount DATA_DEV partition into /data
 	if(mount(DATA_DEV,"/data","ext4",0,""))
 	{
