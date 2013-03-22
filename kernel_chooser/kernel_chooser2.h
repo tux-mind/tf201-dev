@@ -17,6 +17,7 @@
 #define DATA_DIR_STRLEN 16
 // the name of the file where we read the default boot options
 #define DEFAULT_CONFIG "/data/.kernel"
+#define DEFAULT_CONFIG_NAME "default" // fallback name for default config if it has no name/description
 // the console to use
 #define CONSOLE "/dev/tty1"
 // maximum length for a boot entry name
