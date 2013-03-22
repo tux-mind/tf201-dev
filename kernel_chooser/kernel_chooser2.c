@@ -273,8 +273,8 @@ int parser(char *file, char *fallback_name, menu_entry **list)
 
 	if(!(fin=fopen(file,"r")))
 	{
-		//TODO: if we are reading the default entry this isn't an error
-		ERROR("cannot open \"%s\" - %s\n", file,strerror(errno));
+		if(strncmp(fallback_name,DEFAULT_CONFIG_NAME,strlen(DEFAULT_CONFIG_NAME)))
+			ERROR("cannot open \"%s\" - %s\n", file,strerror(errno));
 		//nothing to free, exit now
 		return -1;
 	}
@@ -526,13 +526,13 @@ int main(int argc, char **argv, char **envp)
 		FATAL("mounting %s on \"/data\" - %s\n",DATA_DEV,strerror(errno));
 		goto error;
 	}
+	fatal_error=0;
 	// check for a default entry
-	if(parser(DEFAULT_CONFIG,"default",&list) && fatal_error)
+	if(parser(DEFAULT_CONFIG,DEFAULT_CONFIG_NAME,&list) && fatal_error)
 	{
 		umount("/data");
 		goto error;
 	}
-	fatal_error=0;
 
 	if(list)
 	{
