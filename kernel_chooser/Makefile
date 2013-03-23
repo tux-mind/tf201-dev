@@ -12,8 +12,6 @@ INITRD=initrd
 
 all: v2 initrd use_initrd
 
-test: ncurse_test.c
-	$(CC) -g -o $@ $< -lmenu -lcurses
 
 v2: kernel_chooser2.c menu3.o nGUI.o kexec.o lzma.o zlib.o sha256.o
 	$(CC) $(CFLAGS) -o $(TARGET_BIN) $? $(LDFLAGS)
