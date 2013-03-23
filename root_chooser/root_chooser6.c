@@ -122,6 +122,10 @@ int parser(char *line,char **blkdev, char **root, char ***init_args)
 	// init args_pool ( will free anything != 0 if an error occour )
 	memset(args_pool,'\0',(INIT_MAX_ARGS+1)*sizeof(char*));
 
+	// truncate on first space
+	for(pos=line;*pos!='\0'&&*pos!=' ';pos++);
+	*pos='\0';
+
 	// count args length
 	for(i=0,pos=line;*pos!=':'&&*pos!='\0';pos++)
 		i++;
