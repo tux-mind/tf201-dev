@@ -1,48 +1,8 @@
-root_chooser is now a two part init system for the tf201:
-The host kernel (the one flashed on the device), and a guest kernel.
-This allows seperate kernels for android and linux.
-
-The "host" initrd will boot on device startup.
-It will wait 10 seconds for the user to press a key.
-If no key is pressed, the default configuration is automatically booted.
-Otherwise, a menu will be displayed with a list of configs.
-Upon selection of a config, a new kernel will be called with "kexec hardboot".
-If any error occurs, android will be booted.
-
-The default configuration is /data/.root
-The configuration directory is /data/.root.d
-(note: /data is defined by DATA_DEV as /dev/mmcblk0p8)
-
-The configs wil be parsed as follows:
-	DESCRIPTION
-	blkdev:kernel:initrd
-	CMDLINE
-
-# DESCRIPTION = an optional description
-# blkdev = the device where the kernel and initrd are contained
-# kernel = path to the kernel image ( uImage / zImage / Image )
-# initrd = path to an initrd image
-# CMDLINE = custom commandline to pass to your kernel 
-
-if CMDLINE does not exist, it will use default values
-if CMDLINE begins with a '+' the options will be appended to the default CMDLINE
-otherwise the provided CMDLINE will be used.
-
-*** LIMITS ***
-init_args are limited to INIT_MAX_ARGS defined in the header file. ( now it's 15 )
-the configuration line can be at maximum MAX_LINE defined in the header file. ( now it's 255 )
-
-#########################
-
-An optional "guest" initrd exists.
-It will read the provided commandline and
-mount the desired rootfs (/dev/*),
-chroot into the desired folder (or .img file),
-and call the new init (/sbin/init)
-
-note: any errors here are "fatal" and will not continue into android.
-It is up to the kernel and initrd to procede as it wants.
-You can still hold down power to force a reboot into the original "host" kernel.
-
-This allows multiple installations to reside in the same partition.
-ex: /data/gentoo, /data/alarm, etc
+root_chooser now read it's options from the kernl command line.
+it looks for the newroot option and parse it as follow:
+newroot=blkdev:root:init,arg1,arg2
+where:
+o blkdev is the device to mount
+o root is the directory/dd image/initrd image in the provious device to chroot in
+o init is the init program into the new root
+o arg1,arg2,.. are optional args to the init program
