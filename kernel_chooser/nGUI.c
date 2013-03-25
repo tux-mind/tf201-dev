@@ -307,7 +307,7 @@ int nc_get_user_choice(menu_entry *list)
 
 	while((c = wgetch(menu_window)) != 10)
 	{
-		INFO("key %i %c", c, c);
+		DEBUG("key %i %c", c, c);
 		switch(c)
 		{
 			case 278:
@@ -408,6 +408,7 @@ int nc_wait_for_keypress(void)
 					sleep(1);
 			}
     } while (wpid == 0 && timeout);
+		mvprintw(y,x,"%*s",COLS-x-1," ");
 		if(wpid== 0 || !timeout || !WIFEXITED(stat))
 		{
 			if(!wpid)
