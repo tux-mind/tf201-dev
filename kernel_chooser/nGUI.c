@@ -108,6 +108,7 @@ int nc_init(void)
 	start_color();
 	cbreak();
 	noecho();
+	curs_set(0);
 	keypad(stdscr, TRUE);
 	init_pair(1, COLOR_RED, COLOR_BLACK);
 	init_pair(2, COLOR_CYAN, COLOR_BLACK);
@@ -306,6 +307,7 @@ int nc_get_user_choice(menu_entry *list)
 
 	while((c = wgetch(menu_window)) != 10)
 	{
+		INFO("key %i %c", c, c);
 		switch(c)
 		{
 			case 278:
