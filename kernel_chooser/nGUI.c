@@ -108,9 +108,11 @@ int nc_init(void)
 	start_color();
 	cbreak();
 	noecho();
+	curs_set(0);
 	keypad(stdscr, TRUE);
 	init_pair(1, COLOR_RED, COLOR_BLACK);
 	init_pair(2, COLOR_CYAN, COLOR_BLACK);
+	init_pair(3, COLOR_YELLOW, COLOR_BLACK);
 
 	/* Create messages window */
 	sizey = (LINES * MSG_HEIGHT_PERC)/100;
@@ -306,6 +308,7 @@ int nc_get_user_choice(menu_entry *list)
 
 	while((c = wgetch(menu_window)) != 10)
 	{
+		DEBUG("key %i (%c)\n", c, c);
 		switch(c)
 		{
 			case 278:
@@ -339,7 +342,7 @@ int nc_get_user_choice(menu_entry *list)
 	return MENU_FATAL_ERROR;
 }
 
-void nc_push_message(char *fmt,...)
+void nc_push_message_color(int i, char *fmt,...)
 {
 	va_list ap;
 
@@ -347,10 +350,17 @@ void nc_push_message(char *fmt,...)
 		return;
 
 	va_start(ap,fmt);
+	wattron(messages_win, COLOR_PAIR(i));
 	vwprintw(messages_win,fmt,ap);
+	wattroff(messages_win, COLOR_PAIR(i));
 	wrefresh(messages_win);
 	va_end(ap);
 	refresh();
+}
+
+void nc_push_message(char *fmt,...)
+{
+	nc_push_message_color(0, fmt);
 }
 
 void nc_wait_enter(void)
@@ -406,6 +416,7 @@ int nc_wait_for_keypress(void)
 					sleep(1);
 			}
     } while (wpid == 0 && timeout);
+    	mvprintw(y,x,"%*s",COLS-x-1," ");
 		if(wpid== 0 || !timeout || !WIFEXITED(stat))
 		{
 			if(!wpid)
