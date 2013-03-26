@@ -1,5 +1,5 @@
 # TOOLCHAIN="" and TOOLCHAIN_DIR="" configure the compiler.
-# DEBUG=1 will define DEVELOPMENT, enabling various options such as debug statements and extra pauses.
+# DEVELOPMENT=1 will enable various options such as debug statements and extra pauses.
 
 TARGET_BIN=kernel_chooser
 INITRD_DIR=initramfs
