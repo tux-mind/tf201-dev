@@ -1,6 +1,3 @@
-// enable various options such as debug statements and extra pauses.
-#define DEVELOPMENT
-
 /* taken from http://www.termsys.demon.co.uk/vtansi.htm */
 #define VT_RESET			0
 #define VT_BRIGHT			1
