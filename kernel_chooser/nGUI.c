@@ -416,11 +416,7 @@ int nc_wait_for_keypress(void)
 					sleep(1);
 			}
     } while (wpid == 0 && timeout);
-<<<<<<< HEAD
     	mvprintw(y,x,"%*s",COLS-x-1," ");
-=======
-		mvprintw(y,x,"%*s",COLS-x-1," ");
->>>>>>> 137e43f682b220bdba63b544fd2e7f2410bf7688
 		if(wpid== 0 || !timeout || !WIFEXITED(stat))
 		{
 			if(!wpid)
