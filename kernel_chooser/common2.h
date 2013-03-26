@@ -1,5 +1,5 @@
 // enable various options such as debug statements and extra pauses.
-//#define DEVELOPMENT
+#define DEVELOPMENT
 
 /* taken from http://www.termsys.demon.co.uk/vtansi.htm */
 #define VT_RESET			0
@@ -29,12 +29,12 @@
 #define BG_WHITE		47
 
 // print helpers
-#define FATAL(x,args...)	do{nc_push_message("[FATAL] "x,##args);fatal_error=1;}while(0)
-#define ERROR(x,args...) 	nc_push_message("[ERROR] "x,##args)
-#define WARN(x,args...)		nc_push_message("[WARN ] "x,##args)
-#define INFO(x,args...)		nc_push_message("[INFO ] "x,##args)
+#define FATAL(x,args...)	do{nc_push_message_color(1,"[FATAL] "x,##args);fatal_error=1;}while(0)
+#define ERROR(x,args...) 	nc_push_message_color(2,"[ERROR] "x,##args)
+#define WARN(x,args...)		nc_push_message_color(3,"[WARN ] "x,##args)
+#define INFO(x,args...)		nc_push_message_color(0,"[INFO ] "x,##args)
 #ifdef DEVELOPMENT
-#define DEBUG(x,args...) 	nc_push_message("[DEBUG] "x,##args)
+#define DEBUG(x,args...) 	nc_push_message_color(2,"[DEBUG] "x,##args)
 #define SHELL // allow the user to drop into a shell provided by busybox
 #else
 #define DEBUG(x,args...)
@@ -46,3 +46,4 @@
 extern int fatal_error;
 
 void nc_push_message(char *,...);
+void nc_push_message_color(int, char *,...);
