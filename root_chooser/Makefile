@@ -1,14 +1,26 @@
-# may require edits to reflect your toolchain and compiler options
-# -static is required to build standalone executables
-# -Werror forces you to write good code
+# TOOLCHAIN="" and TOOLCHAIN_DIR="" configure the compiler.
 
-CC?=arm-unknown-linux-gnueabi-gcc
-LD=arm-unknown-linux-gnueabi-ld
-CFLAGS=-Wall -Werror -g -static
-LDFLAGS=-lz
 TARGET_BIN=root_chooser
 INITRD_DIR=initramfs
 INITRD=initrd
+
+CFLAGS=-Wall -Werror -g -static
+
+ifdef TOOLCHAIN_DIR
+	CFLAGS+=-I$(TOOLCHAIN_DIR)/include
+	LDFLAGS=-L$(TOOLCHAIN_DIR)/lib
+else
+	unexport LDFLAGS
+endif
+
+LDFLAGS+=-lz
+
+ifndef TOOLCHAIN
+	TOOLCHAIN=arm-unknown-linux-gnueabi
+endif
+
+CC=$(TOOLCHAIN)-gcc
+LD=$(TOOLCHAIN)-ld
 
 all: v6 initrd
 
