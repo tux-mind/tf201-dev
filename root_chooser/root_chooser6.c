@@ -231,21 +231,22 @@ int parser(char *line,char **blkdev, char **root, char ***init_args)
 int main(int argc, char **argv, char **envp)
 {
 	FILE *log;
-	char 	*line, // where we place the readed line
-				*start, // where our args start
-				*root, // directory to chroot
-				*blkdev, // block device to mount on newroot
-				**new_argv; // init args
+	char *line,          // where we place the readed line
+             *start,         // where our args start
+             *root,          // directory to chroot
+             *blkdev,        // block device to mount on newroot
+             **new_argv;     // init args
 	int i,mounted_twice; // general purpose integer
 
 	line = blkdev = root = NULL;
 	new_argv = NULL;
 	i=mounted_twice=0;
 
+#define EXIT_SILENT     fclose(log); \
+                        fatal(argv,envp); \
+                        exit(EXIT_FAILURE);
 #define EXIT_ERROR(err) fprintf(log, err " - %s\n", strerror(errno)); \
-			fclose(log); \
-			fatal(argv,envp); \
-			exit(EXIT_FAILURE);
+                        EXIT_SILENT
 			
 	if((log = fopen(LOG,"w")) == NULL)
 	{
@@ -275,9 +276,7 @@ int main(int argc, char **argv, char **envp)
 	{
 		fprintf(log,"unable to find \"%s\" in \"%s\"\n",CMDLINE_OPTION,line);
 		free(line);
-		fclose(log);
-		fatal(argv,envp);
-		exit(EXIT_FAILURE);
+		EXIT_SILENT;
 	}
 	start+=CMDLINE_OPTION_LEN;
 	if(parser(start,&blkdev,&root,&new_argv))
@@ -299,47 +298,41 @@ int main(int argc, char **argv, char **envp)
 	}
 	umount("/sys");
 	//mount blkdev on NEWROOT
-	if(!mount(blkdev,NEWROOT,"ext4",0,""))
+	if(mount(blkdev,NEWROOT,"ext4",0,""))
 	{
+		fprintf(log,"unable to mount \"%s\" on %s - %s\n",blkdev,NEWROOT,strerror(errno));
 		free(blkdev);
-		blkdev = root; // keep a track of the old pointer
-		//if root is an ext image mount it on NEWROOT
-		//if root is an initrd(.gz)? file extract it into NEWROOT
-		if(!try_loop_mount(&root,NEWROOT) && !try_initrd_mount(&root,NEWROOT))
+		free(root);
+		for(i=0;new_argv[i];i++)
+			free(new_argv[i]);
+		EXIT_SILENT;
+	}
+	free(blkdev);
+	blkdev = root; // keep a track of the old pointer
+	//if root is an ext image mount it on NEWROOT
+	//if root is an initrd(.gz)? file extract it into NEWROOT
+	if(!try_loop_mount(&root,NEWROOT) && !try_initrd_mount(&root,NEWROOT))
+	{
+		if(blkdev != root) // NEWROOT has been mounted again
+			mounted_twice=1;
+		//check for init existence
+		i=strlen(root) + strlen(new_argv[0]);
+		if((line=malloc((i+1)*sizeof(char))))
 		{
-			if(blkdev != root) // NEWROOT has been mounted again
-				mounted_twice=1;
-			//check for init existence
-			i=strlen(root) + strlen(new_argv[0]);
-			if((line=malloc((i+1)*sizeof(char))))
+			strncpy(line,root,i);
+			strncat(line,new_argv[0],i);
+			line[i]='\0';
+			if(!access(line,R_OK|X_OK))
 			{
-				strncpy(line,root,i);
-				strncat(line,new_argv[0],i);
-				line[i]='\0';
-				if(!access(line,R_OK|X_OK))
+				if(!chdir(root) && !chroot(root))
 				{
-					if(!chdir(root) && !chroot(root))
-					{
-						free(root);
-						fclose(log);
-						execve(new_argv[0],new_argv,envp);
-					}
-					else
-					{
-						fprintf(log,"cannot chroot/chdir to \"%s\" - %s\n",root,strerror(errno));
-						free(root);
-						for(i=0;new_argv[i];i++)
-						free(new_argv[i]);
-						fclose(log);
-						umount(NEWROOT);
-						if(mounted_twice)
-						umount(NEWROOT);
-					}
+					free(root);
+					fclose(log);
+					execve(new_argv[0],new_argv,envp);
 				}
 				else
 				{
-					fprintf(log,"cannot execute \"%s\" - %s\n",line,strerror(errno));
-					free(line);
+					fprintf(log,"cannot chroot/chdir to \"%s\" - %s\n",root,strerror(errno));
 					free(root);
 					for(i=0;new_argv[i];i++)
 						free(new_argv[i]);
@@ -351,7 +344,8 @@ int main(int argc, char **argv, char **envp)
 			}
 			else
 			{
-				fprintf(log,"malloc - %s\n",strerror(errno));
+				fprintf(log,"cannot execute \"%s\" - %s\n",line,strerror(errno));
+				free(line);
 				free(root);
 				for(i=0;new_argv[i];i++)
 					free(new_argv[i]);
@@ -363,29 +357,31 @@ int main(int argc, char **argv, char **envp)
 		}
 		else
 		{
-			if(root) // try_loop_mount reallocate root, a malloc problem can be happend
-			{
-				if(blkdev!=root)
-					umount(NEWROOT);
-				fprintf(log,"try_(loop/initrd)_mount \"%s\" on %s - %s\n",root,NEWROOT,strerror(errno));
-				free(root);
-			}
-			else
-				fprintf(log,"try_loop_mount NULL root - %s\n",strerror(errno));
+			fprintf(log,"malloc - %s\n",strerror(errno));
+			free(root);
 			for(i=0;new_argv[i];i++)
 				free(new_argv[i]);
 			fclose(log);
 			umount(NEWROOT);
+			if(mounted_twice)
+				umount(NEWROOT);
 		}
 	}
 	else
 	{
-		fprintf(log,"unable to mount \"%s\" on %s - %s\n",blkdev,NEWROOT,strerror(errno));
-		free(blkdev);
-		free(root);
+		if(root) // try_loop_mount reallocate root, a malloc problem can be happend
+		{
+			if(blkdev!=root)
+				umount(NEWROOT);
+			fprintf(log,"try_(loop/initrd)_mount \"%s\" on %s - %s\n",root,NEWROOT,strerror(errno));
+			free(root);
+		}
+		else
+			fprintf(log,"try_loop_mount NULL root - %s\n",strerror(errno));
 		for(i=0;new_argv[i];i++)
 			free(new_argv[i]);
 		fclose(log);
+		umount(NEWROOT);
 	}
 	fatal(argv,envp);
 	exit(EXIT_FAILURE);
