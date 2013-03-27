@@ -231,182 +231,158 @@ int parser(char *line,char **blkdev, char **root, char ***init_args)
 int main(int argc, char **argv, char **envp)
 {
 	FILE *log;
-	char 	*line, // where we place the readed line
-				*start, // where our args start
-				*root, // directory to chroot
-				*blkdev, // block device to mount on newroot
-				**new_argv; // init args
+	char *line,          // where we place the readed line
+             *start,         // where our args start
+             *root,          // directory to chroot
+             *blkdev,        // block device to mount on newroot
+             **new_argv;     // init args
 	int i,mounted_twice; // general purpose integer
 
 	line = blkdev = root = NULL;
 	new_argv = NULL;
 	i=mounted_twice=0;
 
-
-	if((log = fopen(LOG,"w")) != NULL)
+#define EXIT_SILENT     fclose(log); \
+                        fatal(argv,envp); \
+                        exit(EXIT_FAILURE);
+#define EXIT_ERROR(err) fprintf(log, err " - %s\n", strerror(errno)); \
+                        EXIT_SILENT
+			
+	if((log = fopen(LOG,"w")) == NULL)
 	{
-		// mount /proc
-		if(!mount("proc","/proc","proc",MS_RELATIME,""))
+		fatal(argv,envp);
+		exit(EXIT_FAILURE);
+	}
+	// mount /proc
+	if(mount("proc", "/proc", "proc", MS_RELATIME, ""))
+	{
+		EXIT_ERROR("unable to mount /proc");
+	}
+	// alloc line
+	if((line = malloc(COMMAND_LINE_SIZE*sizeof(char))) == NULL)
+	{
+		umount("/proc");
+		EXIT_ERROR("malloc");
+	}
+	// read cmdline
+	if(read_our_cmdline(line))
+	{
+		umount("/proc");
+		free(line);
+		EXIT_ERROR("unable to read /proc/cmdline");
+	}
+	umount("/proc");
+	if (!(start=strstr(line,CMDLINE_OPTION)))
+	{
+		fprintf(log,"unable to find \"%s\" in \"%s\"\n",CMDLINE_OPTION,line);
+		free(line);
+		EXIT_SILENT;
+	}
+	start+=CMDLINE_OPTION_LEN;
+	if(parser(start,&blkdev,&root,&new_argv))
+	{
+		free(line);
+		EXIT_ERROR("parsing failed");
+	}
+	free(line);
+	if(mount("sysfs","/sys","sysfs",MS_RELATIME,""))
+	{
+		EXIT_ERROR("unable to mount /sys");
+	}
+	mdev(envp);
+	// make sure this was made
+	for(i=1;access(blkdev, R_OK) && i < TIMEOUT;i++)
+	{
+		sleep(1);
+		mdev(envp);
+	}
+	umount("/sys");
+	//mount blkdev on NEWROOT
+	if(mount(blkdev,NEWROOT,"ext4",0,""))
+	{
+		fprintf(log,"unable to mount \"%s\" on %s - %s\n",blkdev,NEWROOT,strerror(errno));
+		free(blkdev);
+		free(root);
+		for(i=0;new_argv[i];i++)
+			free(new_argv[i]);
+		EXIT_SILENT;
+	}
+	free(blkdev);
+	blkdev = root; // keep a track of the old pointer
+	//if root is an ext image mount it on NEWROOT
+	//if root is an initrd(.gz)? file extract it into NEWROOT
+	if(!try_loop_mount(&root,NEWROOT) && !try_initrd_mount(&root,NEWROOT))
+	{
+		if(blkdev != root) // NEWROOT has been mounted again
+			mounted_twice=1;
+		//check for init existence
+		i=strlen(root) + strlen(new_argv[0]);
+		if((line=malloc((i+1)*sizeof(char))))
 		{
-			//alloc line
-			if((line = malloc(COMMAND_LINE_SIZE*sizeof(char))))
+			strncpy(line,root,i);
+			strncat(line,new_argv[0],i);
+			line[i]='\0';
+			if(!access(line,R_OK|X_OK))
 			{
-				// read cmdline
-				if(!read_our_cmdline(line))
+				if(!chdir(root) && !chroot(root))
 				{
-					umount("/proc");
-					if((start=strstr(line,CMDLINE_OPTION)))
-					{
-						start+=CMDLINE_OPTION_LEN;
-						if(!parser(start,&blkdev,&root,&new_argv))
-						{
-							free(line);
-							if(!mount("sysfs","/sys","sysfs",MS_RELATIME,""))
-							{
-								mdev(envp);
-								if(access(blkdev,R_OK))
-								{
-									sleep(1);
-									mdev(envp);
-									for(i=1;access(blkdev,R_OK) && i < TIMEOUT;i++)
-									{
-										sleep(1);
-										mdev(envp);
-									}
-								}
-								umount("/sys");
-								//mount blkdev on NEWROOT
-								if(!mount(blkdev,NEWROOT,"ext4",0,""))
-								{
-									free(blkdev);
-									blkdev = root; // kepp a track of the old pointer
-									//if root is an ext image mount it on NEWROOT
-									//if root is an initrd(.gz)? file extract it into NEWROOT
-									if(!try_loop_mount(&root,NEWROOT) && !try_initrd_mount(&root,NEWROOT))
-									{
-										if(blkdev != root) // NEWROOT has been mounted again
-											mounted_twice=1;
-										//check for init existence
-										i=strlen(root) + strlen(new_argv[0]);
-										if((line=malloc((i+1)*sizeof(char))))
-										{
-											strncpy(line,root,i);
-											strncat(line,new_argv[0],i);
-											line[i]='\0';
-											if(!access(line,R_OK|X_OK))
-											{
-												if(!chdir(root) && !chroot(root))
-												{
-													free(root);
-													fclose(log);
-													execve(new_argv[0],new_argv,envp);
-												}
-												else
-												{
-													fprintf(log,"cannot chroot/chdir to \"%s\" - %s\n",root,strerror(errno));
-													free(root);
-													for(i=0;new_argv[i];i++)
-														free(new_argv[i]);
-													fclose(log);
-													umount(NEWROOT);
-													if(mounted_twice)
-														umount(NEWROOT);
-												}
-											}
-											else
-											{
-												fprintf(log,"cannot execute \"%s\" - %s\n",line,strerror(errno));
-												free(line);
-												free(root);
-												for(i=0;new_argv[i];i++)
-													free(new_argv[i]);
-												fclose(log);
-												umount(NEWROOT);
-												if(mounted_twice)
-													umount(NEWROOT);
-											}
-										}
-										else
-										{
-											fprintf(log,"malloc - %s\n",strerror(errno));
-											free(root);
-											for(i=0;new_argv[i];i++)
-												free(new_argv[i]);
-											fclose(log);
-											umount(NEWROOT);
-											if(mounted_twice)
-												umount(NEWROOT);
-										}
-									}
-									else
-									{
-										if(root) // try_loop_mount reallocate root, a malloc problem can be happend
-										{
-											if(blkdev!=root)
-												umount(NEWROOT);
-											fprintf(log,"try_(loop/initrd)_mount \"%s\" on %s - %s\n",root,NEWROOT,strerror(errno));
-											free(root);
-										}
-										else
-											fprintf(log,"try_loop_mount NULL root - %s\n",strerror(errno));
-										for(i=0;new_argv[i];i++)
-											free(new_argv[i]);
-										fclose(log);
-										umount(NEWROOT);
-									}
-								}
-								else
-								{
-									fprintf(log,"unable to mount \"%s\" on %s - %s\n",blkdev,NEWROOT,strerror(errno));
-									free(blkdev);
-									free(root);
-									for(i=0;new_argv[i];i++)
-										free(new_argv[i]);
-									fclose(log);
-								}
-							}
-							else
-							{
-								fprintf(log,"unable to mount /sys - %s\n",strerror(errno));
-								fclose(log);
-							}
-						}
-						else
-						{
-							fprintf(log,"parsing failed - %s\n",strerror(errno));
-							free(line);
-							fclose(log);
-						}
-					}
-					else
-					{
-						fprintf(log,"unable to find \"%s\" in \"%s\"\n",CMDLINE_OPTION,line);
-						free(line);
-						fclose(log);
-					}
+					free(root);
+					fclose(log);
+					execve(new_argv[0],new_argv,envp);
 				}
 				else
 				{
-					fprintf(log,"unable to read /proc/cmdline - %s\n",strerror(errno));
-					umount("/proc");
-					free(line);
+					fprintf(log,"cannot chroot/chdir to \"%s\" - %s\n",root,strerror(errno));
+					free(root);
+					for(i=0;new_argv[i];i++)
+						free(new_argv[i]);
 					fclose(log);
+					umount(NEWROOT);
+					if(mounted_twice)
+						umount(NEWROOT);
 				}
 			}
 			else
 			{
-				fprintf(log,"malloc - %s\n",strerror(errno));
-				umount("/proc");
+				fprintf(log,"cannot execute \"%s\" - %s\n",line,strerror(errno));
+				free(line);
+				free(root);
+				for(i=0;new_argv[i];i++)
+					free(new_argv[i]);
 				fclose(log);
+				umount(NEWROOT);
+				if(mounted_twice)
+					umount(NEWROOT);
 			}
 		}
 		else
 		{
-			fprintf(log, "unable to mount /proc - %s\n",strerror(errno));
+			fprintf(log,"malloc - %s\n",strerror(errno));
+			free(root);
+			for(i=0;new_argv[i];i++)
+				free(new_argv[i]);
 			fclose(log);
+			umount(NEWROOT);
+			if(mounted_twice)
+				umount(NEWROOT);
 		}
 	}
-
+	else
+	{
+		if(root) // try_loop_mount reallocate root, a malloc problem can be happend
+		{
+			if(blkdev!=root)
+				umount(NEWROOT);
+			fprintf(log,"try_(loop/initrd)_mount \"%s\" on %s - %s\n",root,NEWROOT,strerror(errno));
+			free(root);
+		}
+		else
+			fprintf(log,"try_loop_mount NULL root - %s\n",strerror(errno));
+		for(i=0;new_argv[i];i++)
+			free(new_argv[i]);
+		fclose(log);
+		umount(NEWROOT);
+	}
 	fatal(argv,envp);
 	exit(EXIT_FAILURE);
 }
