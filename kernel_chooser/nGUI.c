@@ -386,44 +386,20 @@ void nc_print_header(void)
  */
 int nc_wait_for_keypress(void)
 {
-	int x,y,timeout,stat;
-	pid_t pid,wpid;
+	int x,y,timeout;
 
 	y = (LINES/2)-1;
 	x = (COLS - snprintf(NULL,0,WAIT_MESSAGE,0))/2;
-	timeout = TIMEOUT_BOOT;
 
-	if(!(pid=fork()))
-	{
-		getch();
-		exit(EXIT_SUCCESS);
-	}
-	else if(pid < 0)
-	{
-		FATAL("cannot fork - %s\n",strerror(errno));
-		return -1;
-	}
-	else
-	{
-		do
-		{
-			wpid = waitpid(pid, &stat, WNOHANG);
-			if(!wpid)
-			{
-					mvprintw(y,x,WAIT_MESSAGE, timeout); // rewrite the line every second
-					refresh();
-					timeout--;
-					sleep(1);
-			}
-    } while (wpid == 0 && timeout);
-    	mvprintw(y,x,"%*s",COLS-x-1," ");
-		if(wpid== 0 || !timeout || !WIFEXITED(stat))
-		{
-			if(!wpid)
-				kill(pid, SIGKILL);
-			return -1;
-		}
-		else
+	timeout(1000); // wait one second between keypress checks
+
+	for (timeout=TIMEOUT_BOOT; timeout>0; timeout--) {
+		mvprintw(y,x,WAIT_MESSAGE, timeout);
+		refresh();
+		if (getch() != ERR) {
+			mvprintw(y,x,"%*s",COLS-x-1," ");
 			return 0;
+		}
 	}
+	return -1;
 }

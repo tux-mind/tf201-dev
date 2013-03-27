@@ -15,7 +15,7 @@ ifeq ($(DEVELOPMENT), 1)
 endif
 
 ifdef INCLUDE_DIR
-	CFLAGS:=$(CFLAGS) -I$(INCLUDE_DIR)
+	CFLAGS+=-I$(INCLUDE_DIR)
 endif
 
 ifdef LIB_DIR
