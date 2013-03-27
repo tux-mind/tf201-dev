@@ -1,31 +1,25 @@
-# TOOLCHAIN="" and TOOLCHAIN_DIR="" configure the compiler.
-# DEVELOPMENT=1 will enable various options such as debug statements and extra pauses.
+# DEVELOPMENT=1 will enable various options such as debug statements and extra pauses. (defaults to 0)
+DEVELOPMENT?=0
 
 TARGET_BIN=kernel_chooser
 INITRD_DIR=initramfs
 INITRD=initrd
 
+CC?=arm-unknown-linux-gnueabi-gcc
+LD?=arm-unknown-linux-gnueabi-ld
 CFLAGS=-Wall -Werror -g -static
+LDFLAGS=-lz -llzma -lmenu -lcurses
 
-ifdef TOOLCHAIN_DIR
-	CFLAGS+=-I$(TOOLCHAIN_DIR)/include
-	LDFLAGS=-L$(TOOLCHAIN_DIR)/lib
-else
-	unexport LDFLAGS
+ifeq ($(DEVELOPMENT), 1)
+    CFLAGS+=-DDEVELOPMENT
 endif
 
-LDFLAGS+=-lz -llzma -lmenu -lcurses
-
-ifndef TOOLCHAIN
-	TOOLCHAIN=arm-unknown-linux-gnueabi
+ifdef INCLUDE_DIR
+	CFLAGS:=$(CFLAGS) -I$(INCLUDE_DIR)
 endif
 
-CC=$(TOOLCHAIN)-gcc
-LD=$(TOOLCHAIN)-ld
-
-DEVELOPMENT ?= 1
-ifeq (DEVELOPMENT, 1)
-    CFLAGS = $(CFLAGS) -DDEVELOPMENT
+ifdef LIB_DIR
+	LDFLAGS:=-L$(LIB_DIR) $(LDFLAGS)
 endif
 
 all: v2 initrd use_initrd

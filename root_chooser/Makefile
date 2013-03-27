@@ -1,26 +1,19 @@
-# TOOLCHAIN="" and TOOLCHAIN_DIR="" configure the compiler.
-
 TARGET_BIN=root_chooser
 INITRD_DIR=initramfs
 INITRD=initrd
 
+CC?=arm-unknown-linux-gnueabi-gcc
+LD?=arm-unknown-linux-gnueabi-ld
 CFLAGS=-Wall -Werror -g -static
+LDFLAGS=-lz -llzma -lmenu -lcurses
 
-ifdef TOOLCHAIN_DIR
-	CFLAGS+=-I$(TOOLCHAIN_DIR)/include
-	LDFLAGS=-L$(TOOLCHAIN_DIR)/lib
-else
-	unexport LDFLAGS
+ifdef INCLUDE_DIR
+	CFLAGS:=$(CFLAGS) -I$(INCLUDE_DIR)
 endif
 
-LDFLAGS+=-lz
-
-ifndef TOOLCHAIN
-	TOOLCHAIN=arm-unknown-linux-gnueabi
+ifdef LIB_DIR
+	LDFLAGS:=-L$(LIB_DIR) $(LDFLAGS)
 endif
-
-CC=$(TOOLCHAIN)-gcc
-LD=$(TOOLCHAIN)-ld
 
 all: v6 initrd
 

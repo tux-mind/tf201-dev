@@ -3,7 +3,7 @@
 #export NVFLASH if you want to use that instead of fastboot
 
 flash() {
-	if [ -n $2 ]; then
+	if [ "$2" ]; then
 		wheelie --blob ./blob.bin && \
 		nvflash -r --download 6 $1 && \
 		nvflash -r --go && \
@@ -32,7 +32,6 @@ if [ "$NVFLASH" ]; then
 	flash ../test/test.LNX 1 && \
 	cd -
 else
-
 	blobpack "../test/test.blob" LNX "../test/test.LNX" && \
 	flash ../test/test.blob && \
 	cd -
