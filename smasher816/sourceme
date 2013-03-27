@@ -1,0 +1,38 @@
+#Source this file to prepair for tf201-dev work
+#Made for Smasher816, edit to your desires and setup
+
+#Various options
+export DEVELOPMENT=1 #enable DEVELOPMENT ifdefs in the code
+export NVFLASH=1 #Use nvflash instead of fastboot
+
+#Make sure the binaries are in your path
+#export PATH=$PATH:
+
+#Set the compiler reference directories
+TOOLCHAIN_DIR="/media/arch/STORAGE/tf201-kernel/x-tools7h/arm-unknown-linux-gnueabi"
+export INCLUDE_DIR=$TOOLCHAIN_DIR/include
+export LIB_DIR=$TOOLCHAIN_DIR/lib
+
+#Use my own toolchain
+TOOLCHAIN="$TOOLCHAIN_DIR/bin/arm-unknown-linux-gnueabi"
+export CC=$TOOLCHAIN-gcc
+export LD=$TOOLCHAIN-LD
+
+#These can cause issues
+unset CFLAGS
+unset CPPFLAGS
+unset CXXFLAGS
+unset LD_PRELOAD
+
+#Useful routines
+alias adbreboot='adb devices | sed -n 2p | grep -q device && echo -n "Press any key to reboot..." && read -sk1 && adb reboot; echo>/dev/null' #Press key to reboot, ignore if no device
+alias buildall="make clean &>/dev/null; make DEVELOPMENT=\$DEVELOPMENT v2 2>/dev/null && make initrd && adbreboot && make use_initrd" #full make cycle with clean,build,reboot,flash
+alias compiletest='inotifywait -m * -e close_write | while read line; do clear; make DEVELOPMENT=1 v2 1>/dev/null; done' #wait for a file change, output any build errors
+alias cdroot='cd /media/arch/STORAGE/git/tf201-dev' #save the folder
+
+#Toggle development mode
+alias debug='export DEVELOPMENT=1'
+alias nodebug='export DEVELOPMENT=0'
+
+#Get to the workspace
+cdroot; cd kernel_chooser
