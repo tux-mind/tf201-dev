@@ -375,26 +375,6 @@ int open_console(void)
 	return 0;
 }
 
-char getch()
-{
-	char buf = 0;
-	struct termios old,new;
-
-	if(tcgetattr(STDIN_FILENO, &old)<0)
-		return -1;
-	new = old;
-	new.c_lflag &= ~(ICANON | ECHO);
-	new.c_cc[VMIN] = 1;
-	new.c_cc[VTIME] = 0;
-	if (tcsetattr(STDIN_FILENO, TCSANOW, &new) < 0)
-					return -1;
-	if (read(STDIN_FILENO, &buf, 1) < 0)
-					return -1;
-	if (tcsetattr(0, TCSADRAIN, &old) < 0)
-					return -1;
-	return buf;
-}
-
 void press_enter(void)
 {
 	INFO("press <ENTER> to continue...\n");
