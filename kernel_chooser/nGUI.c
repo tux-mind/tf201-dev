@@ -293,10 +293,7 @@ int nc_compute_menu(menu_entry *list)
 
 int nc_get_user_choice(menu_entry *list)
 {
-	int c,selected_id,n_choices,default_count;
-	menu_entry *current;
-	char *current_name;
-
+	int c,default_count;
 	default_count = ARRAY_SIZE(default_entries);
 
 	/* Post the menu */
@@ -328,16 +325,17 @@ int nc_get_user_choice(menu_entry *list)
 		}
 		wrefresh(menu_window);
 	}
-	current_name = (char*)item_description(current_item(menu));
-	for(current=list;current && current->name != current_name;current=current->next);
-	if(current)
-		selected_id = current->id;
-	// HACK: use n_choices as temporary variable
-	for(n_choices=0;!selected_id && n_choices<default_count;n_choices++)
-		if(default_entries[n_choices].name == current_name)
-			selected_id = default_entries[n_choices].num;
-	if(selected_id)
-		return selected_id;
+
+	// HACK: use c as temporary variable
+	c = item_index(current_item(menu));
+	if (c < default_count)
+		c= default_entries[c].num;
+	else if (c == default_count)
+		c = -5;
+	else
+		c = c - default_count + 1;
+	return c;
+
 	error:
 	return MENU_FATAL_ERROR;
 }

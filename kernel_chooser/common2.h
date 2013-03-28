@@ -27,7 +27,7 @@
 
 // print helpers
 #define FATAL(x,args...)	do{nc_push_message_color(1,"[FATAL] "x,##args);fatal_error=1;}while(0)
-#define ERROR(x,args...) 	nc_push_message_color(2,"[ERROR] "x,##args)
+#define ERROR(x,args...) 	nc_push_message_color(1,"[ERROR] "x,##args)
 #define WARN(x,args...)		nc_push_message_color(3,"[WARN ] "x,##args)
 #define INFO(x,args...)		nc_push_message_color(0,"[INFO ] "x,##args)
 #ifdef DEVELOPMENT
