@@ -351,7 +351,7 @@ void nc_push_message(int i, char *prefix, char *fmt,...)
 
 	va_start(ap,fmt);
 	wattron(messages_win, COLOR_PAIR(i));
-	wprintw(messages_win,prefix);
+	wprintw(messages_win,"%s ",prefix);
 	wattroff(messages_win, COLOR_PAIR(i));
 	vwprintw(messages_win,fmt,ap);
 	wrefresh(messages_win);
