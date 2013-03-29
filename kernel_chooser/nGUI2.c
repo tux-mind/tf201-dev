@@ -8,7 +8,7 @@
 
 #include "common3.h"
 #include "menu3.h"
-#include "nGUI.h"
+#include "nGUI2.h"
 
 int	menu_sizex, // size fo the menu_window ( getmaxyx does not work )
 		menu_sizey,
@@ -92,6 +92,28 @@ int copy_with_padd(char **dest, int sizex, char *src)
 	return 0;
 }
 
+void fill_box(int x, int y, int w, int h) {
+	int i,j;
+	for(j = y; j <= y + h; j++)
+		for(i = x; i <= x + w; i++)
+			mvaddch(j, i, ' ');
+	refresh();
+}
+
+void create_box(int x, int y, int w, int h)
+{
+	fill_box(x,y,w,h);
+	mvaddch(y, x, ACS_ULCORNER);
+	mvaddch(y, x + w, ACS_URCORNER);
+	mvaddch(y + h, x, ACS_LLCORNER);
+	mvaddch(y + h, x + w, ACS_LRCORNER);
+	mvhline(y, x + 1, ACS_HLINE, w - 1);
+	mvhline(y + h, x + 1, ACS_HLINE, w - 1);
+	mvvline(y + 1, x, ACS_VLINE, h - 1);
+	mvvline(y + 1, x + w, ACS_VLINE, h - 1);
+	refresh();
+}
+
 int nc_init(void)
 {
 	int sizex,sizey;
@@ -119,19 +141,11 @@ int nc_init(void)
 	/* Create messages window */
 	sizey = (LINES * MSG_HEIGHT_PERC)/100;
 	sizex = (COLS * MSG_WIDTH_PERC)/100;
-	messages_win = newwin(sizey-2,sizex-2,(LINES-sizey)+1,1);
+	messages_win = newwin(sizey-1,sizex,(LINES-sizey)+2,0);
 	scrollok(messages_win,TRUE);
 
-	attron(COLOR_PAIR(COLOR_LOG_BORDER));
-	mvaddch(LINES-sizey,0,ACS_ULCORNER);
-	mvhline(LINES-sizey,1,ACS_HLINE,sizex-2);
-	mvaddch(LINES-sizey,sizex-1,ACS_URCORNER);
-	mvaddch(LINES-1,0,ACS_LLCORNER);
-	mvhline(LINES-1,1,ACS_HLINE,sizex-2);
-	mvaddch(LINES-1,sizex-1,ACS_LRCORNER);
-	mvvline(LINES-sizey+1,0,ACS_VLINE,sizey-2);
-	mvvline(LINES-sizey+1,sizex-1,ACS_VLINE,sizey-2);
-	wrefresh(messages_win);
+	mvhline(LINES-sizey+1,0,ACS_HLINE,sizex);
+
 	refresh();
 	attroff(COLOR_PAIR(COLOR_LOG_BORDER));
 	return 0;
@@ -167,32 +181,21 @@ void nc_destroy(void)
 
 void draw_menu_border(void)
 {
-	int startx,starty,cur_y,cur_x,len;
+	int startx,starty,len;
 	/* Print a border around the main window and print a title */
-	attron(COLOR_PAIR(COLOR_MENU_BORDER));
 	getbegyx(menu_window,starty,startx);
+	startx -= 1;
+	starty -= 3;
 	len = strlen(PROMPT);
-	cur_y=starty-1;
-	cur_x=startx;
-	mvhline(cur_y, cur_x, ACS_HLINE, menu_sizex);
-	cur_y-=2;
-	mvhline(cur_y, cur_x, ACS_HLINE, menu_sizex);
-	cur_y=starty+menu_sizey;
-	mvhline(cur_y, cur_x, ACS_HLINE, menu_sizex);
-	mvaddch(cur_y,cur_x-1,ACS_LLCORNER);
-	cur_y = starty-2;
-	cur_x = startx-1;
-	mvvline(cur_y,cur_x, ACS_VLINE, menu_sizey+2);
-	mvprintw(cur_y,cur_x + ((menu_sizex - len)/2),"%s",PROMPT);
-	mvaddch(cur_y-1,cur_x,ACS_ULCORNER);
-	cur_x = startx+menu_sizex;
-	mvvline(cur_y,cur_x, ACS_VLINE, menu_sizey+2);
-	mvaddch(cur_y-1,cur_x,ACS_URCORNER);
-	cur_y=starty+menu_sizey;
-	mvaddch(cur_y,cur_x,ACS_LRCORNER);
+	attron(COLOR_PAIR(COLOR_MENU_BORDER));
+	create_box(startx,starty,menu_sizex+1,menu_sizey+3);
+	mvprintw(starty+1,startx + ((menu_sizex - len)/2),"%s",PROMPT);
+	mvhline(starty+2, startx, ACS_HLINE, menu_sizex);
+	mvaddch(starty+2,startx,ACS_LTEE);
+	mvaddch(starty+2,startx+menu_sizex+1,ACS_RTEE);
+	attroff(COLOR_PAIR(COLOR_MENU_BORDER));
 	wrefresh(menu_window);
 	refresh();
-	attroff(COLOR_PAIR(COLOR_MENU_BORDER));
 }
 
 int nc_compute_menu(menu_entry *list)
