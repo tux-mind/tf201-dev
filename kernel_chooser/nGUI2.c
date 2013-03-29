@@ -87,7 +87,7 @@ int copy_with_padd(char **dest, int sizex, char *src)
 		return -1;
 	}
 	memset(*dest,' ',sizex);
-	strncpy((*dest + ((sizex - len)/2)),src,len);
+	strncpy(*dest+1,src,len);
 	*((*dest)+sizex)='\0';
 	return 0;
 }
@@ -127,13 +127,13 @@ int nc_init(void)
 
 	/* Initialize curses */
 	initscr(); // TODO: error checking
-	start_color();
 	cbreak();
 	noecho();
 	curs_set(0);
 	keypad(stdscr, TRUE);
 
-	// colors
+	/* Initialize colors */
+	start_color();
 	init_pair(COLOR_LOG_DEBUG, COLOR_CYAN, COLOR_BLACK);
 	init_pair(COLOR_LOG_WARN, COLOR_YELLOW, COLOR_BLACK);
 	init_pair(COLOR_LOG_ERROR, COLOR_RED, COLOR_BLACK);
@@ -141,12 +141,16 @@ int nc_init(void)
 	init_pair(COLOR_MENU_TEXT, COLOR_WHITE, COLOR_BLUE);
 	init_pair(COLOR_MENU_TITLE, COLOR_CYAN, COLOR_BLUE);
 
+	/* Print title */
+	mvprintw(0,0,"%s",HEADER_LEFT);
+	mvprintw(0,COLS-strlen(HEADER_RIGHT),"%s",HEADER_RIGHT);
+
 	/* Create messages window */
 	sizey = (LINES * MSG_HEIGHT_PERC)/100;
 	sizex = (COLS * MSG_WIDTH_PERC)/100;
+	mvhline(LINES-sizey+1,0,ACS_HLINE,sizex);
 	messages_win = newwin(sizey-1,sizex,(LINES-sizey)+2,0);
 	scrollok(messages_win,TRUE);
-	mvhline(LINES-sizey+1,0,ACS_HLINE,sizex);
 
 	refresh();
 	return 0;
@@ -370,18 +374,6 @@ void nc_push_message(int i, char *prefix, char *fmt,...)
 void nc_wait_enter(void)
 {
 	while(getch() != 10);
-}
-
-void nc_print_header(void)
-{
-	const char *strings[] = HEADER;
-	int y,x;
-
-	for(y=0;strings[y];y++)
-	{
-		x = (COLS-strlen(strings[y]))/2;
-		mvprintw(y,x,"%s",strings[y]);
-	}
 }
 
 /** wait for a keypress while coutdown.

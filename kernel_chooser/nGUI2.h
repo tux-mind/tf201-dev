@@ -29,13 +29,8 @@
 #define WAIT_MESSAGE "Automatic boot in %2d..."
 #define TIMEOUT_BOOT 10 /* time to wait for the user to press a key */
 
-#define HEADER 	\
-{\
-	"                      kernel_chooser - version 2                           ",\
-	"                  Open Source rocks! - tux_mind <massimo.dragano@gmail.com>",\
-	"                                     - smasher816 <smasher816@gmail.com>   ",\
-	NULL\
-}
+#define HEADER_LEFT "kernel_chooser v2"
+#define HEADER_RIGHT "github.com/tux-mind/tf201-dev/kernel_chooser"
 
 #define PROMPT "choose an option"
 

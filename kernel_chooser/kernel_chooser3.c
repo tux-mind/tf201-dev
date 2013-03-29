@@ -491,7 +491,6 @@ int main(int argc, char **argv, char **envp)
 	umount("/sys");
 	if(nc_init())
 		goto error;
-	nc_print_header();
 	INFO("mounting /proc\n");
 	// mount proc ( required by kexec )
 	if(mount("proc","/proc","proc",MS_RELATIME,""))
