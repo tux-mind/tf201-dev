@@ -183,6 +183,21 @@ void nc_destroy(void)
 	endwin();
 }
 
+/* save ncurses state
+   used to temporarly leave ncusrses (run external program) */
+void nc_save() {
+	unpost_menu(menu[menu_i]); // will repost when we get back
+	def_prog_mode();
+	endwin();
+}
+
+/* restore curses state */
+void nc_load() {
+	reset_prog_mode();
+	keypad(stdscr, true);
+	refresh();	
+}
+
 void draw_menu_border(void)
 {
 	int startx,starty,len;

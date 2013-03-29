@@ -30,6 +30,8 @@ void k_exec(void);
 int nc_compute_menu(menu_entry *list);
 int nc_init(void);
 void nc_destroy(void);
+void nc_save();
+void nc_load();
 void nc_wait_enter(void);
 int nc_get_user_choice();
 void nc_print_header(void);
@@ -41,7 +43,6 @@ void nc_destroy_menu(void);
  * but user can have an entry ID which have the same value of a char.
  * so i decided to use negative numbers for special entries.
  */
-#define MENU_PROMPT			 0
 #define MENU_REBOOT			-1
 #define MENU_HALT 			-2
 #define MENU_RECOVERY		-3

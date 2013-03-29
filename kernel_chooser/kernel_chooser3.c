@@ -44,6 +44,8 @@
 #include <termios.h>
 #include <ctype.h>
 
+#include <ncurses.h>
+
 #include "common3.h"
 #include "menu3.h"
 #include "kernel_chooser3.h"
@@ -549,8 +551,6 @@ skip_menu:
 	// decide what to do
 	switch (i)
 	{
-		case MENU_PROMPT:
-			goto menu_prompt;
 		case MENU_FATAL_ERROR:
 			FATAL("ncurses - %s\n",strerror(errno));
 			goto error;
@@ -574,18 +574,9 @@ skip_menu:
 			goto error;
 #ifdef SHELL
 		case MENU_SHELL:
-			if(!data_dir_to_parse)
-			{
-				//remount data ( no error check, we are debugging here )
-				mount(DATA_DEV,"/data","ext4",0,"");
-				nc_destroy_menu();
-			}
-			free_list(list);
-			nc_destroy();
-			data_dir_to_parse=1;
+			nc_save();
 			shell();
-			parser(DEFAULT_CONFIG,"default",&list);
-			nc_init();
+			nc_load();
 			goto menu_prompt;
 #endif
 		default: // parsed config
