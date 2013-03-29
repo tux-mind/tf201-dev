@@ -92,17 +92,17 @@ int copy_with_padd(char **dest, int sizex, char *src)
 	return 0;
 }
 
-void fill_box(int x, int y, int w, int h) {
+void fill_box(int h, int w, int y, int x) {
 	int i,j;
-	for(j = y; j <= y + h; j++)
-		for(i = x; i <= x + w; i++)
-			mvaddch(j, i, ' ');
+	for(i = y; i <= y + h; i++)
+		for(j = x; j <= x + w; j++)
+			mvaddch(i, j, ' ');
 	refresh();
 }
 
-void create_box(int x, int y, int w, int h)
+void create_box(int h, int w, int y, int x)
 {
-	fill_box(x,y,w,h);
+	fill_box(h,w,y,x);
 	mvaddch(y, x, ACS_ULCORNER);
 	mvaddch(y, x + w, ACS_URCORNER);
 	mvaddch(y + h, x, ACS_LLCORNER);
@@ -140,6 +140,7 @@ int nc_init(void)
 	init_pair(COLOR_MENU_BORDER, COLOR_BLACK, COLOR_BLUE);
 	init_pair(COLOR_MENU_TEXT, COLOR_WHITE, COLOR_BLUE);
 	init_pair(COLOR_MENU_TITLE, COLOR_CYAN, COLOR_BLUE);
+	init_pair(COLOR_POPUP, COLOR_WHITE, COLOR_RED);
 
 	/* Print title */
 	mvprintw(0,0,"%s",HEADER_LEFT);
@@ -192,15 +193,13 @@ void draw_menu_border(void)
 	startx -= 1;
 	starty -= 3;
 	len = strlen(PROMPT);
-	attron(COLOR_PAIR(COLOR_MENU_BORDER));
-	create_box(startx,starty,menu_sizex+1,menu_sizey+3);
+	create_box(menu_sizey+3,menu_sizex+1,starty,startx);
 	mvhline(starty+2, startx+1, ACS_HLINE, menu_sizex);
 	mvaddch(starty+2,startx,ACS_LTEE);
 	mvaddch(starty+2,startx+menu_sizex+1,ACS_RTEE);
 	attron(COLOR_PAIR(COLOR_MENU_TITLE));
 	mvprintw(starty+1,startx + ((menu_sizex - len)/2),"%s",PROMPT);
 	attroff(COLOR_PAIR(COLOR_MENU_TITLE));
-	wbkgd(menu_window,COLOR_PAIR(COLOR_MENU_TEXT));
 	wrefresh(menu_window);
 	refresh();
 }
@@ -299,11 +298,40 @@ int nc_compute_menu(menu_entry *list)
 	if(set_menu_mark(menu, NULL)!= E_OK)
 		ERROR("set_menu_mark - %s\n",strerror(errno));
 
+	wbkgd(menu_window,COLOR_PAIR(COLOR_MENU_TEXT));
+	attron(COLOR_PAIR(COLOR_MENU_BORDER));
 	draw_menu_border();
+	attroff(COLOR_PAIR(COLOR_MENU_BORDER));
+
+	attron(COLOR_PAIR(COLOR_LOG_ERROR));
+	mvprintw(7+menu_sizey,(COLS-ARRAY_SIZE(HELP_MESSAGE))/2,HELP_MESSAGE);
+	attroff(COLOR_PAIR(COLOR_LOG_ERROR));
+
 	return 0;
 	error:
 	nc_destroy_menu();
 	return -1;
+}
+
+void nc_help_popup()
+{
+	int x, y, i;
+	const char *strings[] = HELP_PAGE;
+	x = (COLS-menu_sizex)/2+1;
+	y = 3;
+
+	unpost_menu(menu); // E_POSTED from nc_get_user_choice
+	attron(COLOR_PAIR(COLOR_POPUP));
+	create_box( menu_sizey+3, menu_sizex+1, y-1, x-2);
+	for(i=0;strings[i];i++)
+	{
+		mvprintw(y+i,x,"%s",strings[i]);
+	}
+	mvprintw(y+i+1,(COLS-strlen(PRESS_ENTER))/2,PRESS_ENTER);
+	
+	nc_wait_enter();
+	attron(COLOR_PAIR(COLOR_MENU_BORDER));
+	draw_menu_border();
 }
 
 int nc_get_user_choice(menu_entry *list)
@@ -313,7 +341,10 @@ int nc_get_user_choice(menu_entry *list)
 
 	/* Post the menu */
 	if(post_menu(menu)!=E_OK)
+	{
+		ERROR("post_menu - %s\n",strerror(errno));
 		goto error;
+	}
 	wrefresh(menu_window);
 	wrefresh(messages_win);
 	refresh();
@@ -337,6 +368,9 @@ int nc_get_user_choice(menu_entry *list)
 			case KEY_PPAGE:
 				menu_driver(menu, REQ_SCR_UPAGE);
 				break;
+			case HELP_KEY:
+				nc_help_popup();
+				return MENU_PROMPT;
 		}
 		wrefresh(menu_window);
 	}

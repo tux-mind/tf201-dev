@@ -543,12 +543,14 @@ menu_prompt:
 	//take_console_control();
 skip_menu:
 	DEBUG("user chose %d\n",i);
-#ifdef DEVELOPMENT
-	press_enter();
-#endif
+//#ifdef DEVELOPMENT
+//	press_enter();
+//#endif
 	// decide what to do
 	switch (i)
 	{
+		case MENU_PROMPT:
+			goto menu_prompt;
 		case MENU_FATAL_ERROR:
 			FATAL("ncurses - %s\n",strerror(errno));
 			goto error;

@@ -3,11 +3,12 @@
  * but user can have an entry ID which have the same value of a char.
  * so i decided to use negative numbers for special entries.
  */
-#define MENU_REBOOT		-1
-#define MENU_HALT 		-2
-#define MENU_RECOVERY	-3
-#define MENU_SHELL		-4
-#define MENU_DEFAULT	-5
+#define MENU_PROMPT			 0
+#define MENU_REBOOT			-1
+#define MENU_HALT 			-2
+#define MENU_RECOVERY		-3
+#define MENU_SHELL			-4
+#define MENU_DEFAULT		-5
 #define MENU_FATAL_ERROR	-6
 
 // colors
@@ -18,6 +19,7 @@
 #define COLOR_MENU_BORDER 4
 #define COLOR_MENU_TEXT 5
 #define COLOR_MENU_TITLE 6
+#define COLOR_POPUP 7
 
 // percentage of screen used by the menu
 #define MENU_WIDTH_PERC 80
@@ -32,6 +34,41 @@
 #define HEADER_LEFT "kernel_chooser v2"
 #define HEADER_RIGHT "github.com/tux-mind/tf201-dev/kernel_chooser"
 
+#define HELP_KEY 'h'
+#define HELP_MESSAGE "Press [h] for help"
+#define HELP_PAGE 	\
+{\
+	"kernel_chooser version 3",\
+	"",\
+	"Created by - tux_mind <massimo.dragano@gmail.com>",\
+	"           - smasher816 <smasher816@gmail.com>",\
+	"",\
+	"Open Source rocks!",\
+	"For more information please visit https://github.com/tux-mind/tf201-dev",\
+	"",\
+	"Controls:",\
+	"    Up Arrow / Volume Up     - Go up an item",\
+	"    Down Arrow / Volume Down - Go down an item",\
+	"    Enter / Power            - Choose the selected item",\
+	"    H                        - open this help screen",\
+	"",\
+	"Configuration:",\
+	"    The default choice is /data/.kernel",\
+	"    All menu items are added in the /data/.kernel.d/ directory, with the following format",\
+	"",\
+	"    DESCRIPTION",\
+	"    blkdev:kernel:initrd",\
+	"    CMDLINE",\
+	"",\
+	"    For descriptions of the items and example configs, please check the github webpage",\
+	"",\
+	"",\
+	"",\
+	"",\
+	NULL\
+}
+
+#define PRESS_ENTER "press <ENTER> to continue..."
 #define PROMPT "choose an option"
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))

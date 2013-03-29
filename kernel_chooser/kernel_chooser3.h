@@ -41,9 +41,11 @@ void nc_destroy_menu(void);
  * but user can have an entry ID which have the same value of a char.
  * so i decided to use negative numbers for special entries.
  */
-#define MENU_REBOOT		-1
-#define MENU_HALT 		-2
-#define MENU_RECOVERY	-3
-#define MENU_SHELL		-4
-#define MENU_DEFAULT	-5
+#define MENU_PROMPT			 0
+#define MENU_REBOOT			-1
+#define MENU_HALT 			-2
+#define MENU_RECOVERY		-3
+#define MENU_SHELL			-4
+#define MENU_DEFAULT		-5
 #define MENU_FATAL_ERROR	-6
+ 
