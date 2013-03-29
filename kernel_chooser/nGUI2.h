@@ -78,6 +78,6 @@ int nc_init(void);
 void nc_destroy(void);
 void nc_destroy_menu(void);
 void nc_wait_enter(void);
-int nc_get_user_choice(menu_entry *list);
+int nc_get_user_choice();
 void nc_print_header(void);
 int nc_wait_for_keypress(void);

@@ -539,13 +539,13 @@ menu_prompt:
 		if(nc_compute_menu(list))
 			goto error;
 	}
-	i=nc_get_user_choice(list);
+	i=nc_get_user_choice();
 	//take_console_control();
 skip_menu:
 	DEBUG("user chose %d\n",i);
-//#ifdef DEVELOPMENT
-//	press_enter();
-//#endif
+#ifdef DEVELOPMENT
+	press_enter();
+#endif
 	// decide what to do
 	switch (i)
 	{

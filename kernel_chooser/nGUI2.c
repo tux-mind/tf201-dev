@@ -10,11 +10,11 @@
 #include "menu3.h"
 #include "nGUI2.h"
 
-int	menu_sizex, // size fo the menu_window ( getmaxyx does not work )
+int	menu_i, menu_sizex, // size fo the menu_window ( getmaxyx does not work )
 		menu_sizey,
 		entries_count; // count of created entries ( useful for error handling )
-ITEM **items; // ncurses menu items
-MENU *menu; // ncurses menu
+ITEM **items, **items2; // ncurses menu items
+MENU *menu[2]; //, *menu2; // ncurses menu
 WINDOW 	*menu_window, // ncurses menu window
 				*messages_win; // ncurses messages window
 char 	**local_entries; // our padded copy of the items names
@@ -92,17 +92,11 @@ int copy_with_padd(char **dest, int sizex, char *src)
 	return 0;
 }
 
-void fill_box(int h, int w, int y, int x) {
-	int i,j;
-	for(i = y; i <= y + h; i++)
-		for(j = x; j <= x + w; j++)
-			mvaddch(i, j, ' ');
-	refresh();
-}
-
 void create_box(int h, int w, int y, int x)
 {
-	fill_box(h,w,y,x);
+	int i;
+	for(i = y; i <= y + h; i++)
+		mvhline(i,x,' ',w);
 	mvaddch(y, x, ACS_ULCORNER);
 	mvaddch(y, x + w, ACS_URCORNER);
 	mvaddch(y + h, x, ACS_LLCORNER);
@@ -119,7 +113,9 @@ int nc_init(void)
 	int sizex,sizey;
 
 	/* Initialize variables to free in case of errors */
-	menu = NULL;
+	menu[0] = NULL;
+	menu[1] = NULL;
+	menu_i = 0;
 	messages_win = menu_window = NULL;
 	items = NULL;
 	local_entries = NULL;
@@ -159,8 +155,10 @@ int nc_init(void)
 
 void nc_destroy_menu(void)
 {
-	unpost_menu(menu);
-	free_menu(menu);
+	unpost_menu(menu[0]);
+	unpost_menu(menu[1]);
+	free_menu(menu[0]);
+	free_menu(menu[1]);
 	delwin(menu_window);
 	if(items[entries_count]) // items are NULL-terminated
 		free_item(items[entries_count]);
@@ -222,10 +220,10 @@ int nc_compute_menu(menu_entry *list)
 	// count the default ones
 	default_count = ARRAY_SIZE(default_entries);
 	// sum
-	n_choices+= default_count;
 	items = (ITEM **)malloc((n_choices+1)*sizeof(ITEM *));
-	local_entries = malloc((n_choices+1)*sizeof(char *));
-	if(!items || !local_entries)
+	items2 = (ITEM **)malloc((default_count+1)*sizeof(ITEM *));
+	local_entries = malloc((n_choices+default_count+1)*sizeof(char *));
+	if( !local_entries) //!items ||
 	{
 		FATAL("malloc - %s\n",strerror(errno));
 		goto error;
@@ -237,8 +235,8 @@ int nc_compute_menu(menu_entry *list)
 		else
 		{
 			// HACK: store src pointer in item description
-			items[entries_count] = new_item(local_entries[entries_count], default_entries[entries_count].name);
-			if(!items[entries_count])
+			items2[entries_count] = new_item(local_entries[entries_count], default_entries[entries_count].name);
+			if(!items2[entries_count])
 			{
 				free(local_entries[entries_count]);
 				FATAL("new_item - %s\n",strerror(errno));
@@ -251,27 +249,24 @@ int nc_compute_menu(menu_entry *list)
 		else
 		{
 			// HACK: store src pointer in item description
-			items[entries_count] = new_item(local_entries[entries_count], current->name);
-			if(!items[entries_count])
+			items[entries_count-default_count] = new_item(local_entries[entries_count], current->name);
+			if(!items[entries_count-default_count])
 			{
 				free(local_entries[entries_count]);
 				FATAL("new_item - %s\n",strerror(errno));
 				goto error;
 			}
 		}
-	items[entries_count] = new_item(NULL,NULL);
+	items[entries_count-default_count] = new_item(NULL,NULL);
+	items2[default_count] = new_item(NULL,NULL);
 	/* Create menu */
-	menu = new_menu((ITEM **)items);
-	if(!menu)
+	menu[0] = new_menu((ITEM **)items);
+	menu[1] = new_menu((ITEM **)items2);
+	if(!menu[0] || !menu[1])
 	{
 		FATAL("new_menu - %s\n",strerror(errno));
 		goto error;
 	}
-	/* Set menu option not to show the description */
-	menu_opts_off(menu, O_SHOWDESC);
-
-	/* Change item color */
-	set_menu_back(menu, COLOR_PAIR(COLOR_MENU_TEXT));
 
 	/* Create the window to be associated with the menu */
 	menu_window = newwin( menu_sizey, menu_sizex, 5, (COLS-menu_sizex)/2);
@@ -280,23 +275,33 @@ int nc_compute_menu(menu_entry *list)
 		FATAL("newwin - %s\n",strerror(errno));
 		goto error;
 	}
-
 	keypad(menu_window, TRUE);
 	if(wattron(menu_window,COLOR_PAIR(COLOR_MENU_TEXT))==ERR)
 		ERROR("wattron - %s\n",strerror(errno));
 	/* Set main window and sub window */
-	if(set_menu_win(menu, menu_window)==ERR)
-	{
-		FATAL("set_menu_win - %s\n",strerror(errno));
-		goto error;
-	}
-	// set menu size
-	if(set_menu_format(menu, menu_sizey,1) != E_OK)
-		ERROR("set_menu_format - %s\n",strerror(errno));
+	
+	// hacky temp variable
+	for (n_choices=0; n_choices<2; n_choices++)
+	{	
+		
+		/* Set menu option not to show the description */
+		menu_opts_off(menu[n_choices], O_SHOWDESC);
+		/* Change item color */
+		set_menu_back(menu[n_choices], COLOR_PAIR(COLOR_MENU_TEXT));
 
-	/* Set menu mark  */
-	if(set_menu_mark(menu, NULL)!= E_OK)
-		ERROR("set_menu_mark - %s\n",strerror(errno));
+		if(set_menu_win(menu[n_choices], menu_window)==ERR)
+		{
+			FATAL("set_menu_win - %s\n",strerror(errno));
+			goto error;
+		}
+		// set menu size
+		if(set_menu_format(menu[n_choices], menu_sizey,1) != E_OK)
+			ERROR("set_menu_format - %s\n",strerror(errno));
+
+		/* Set menu mark  */
+		if(set_menu_mark(menu[n_choices], NULL)!= E_OK)
+			ERROR("set_menu_mark - %s\n",strerror(errno));
+	}
 
 	wbkgd(menu_window,COLOR_PAIR(COLOR_MENU_TEXT));
 	attron(COLOR_PAIR(COLOR_MENU_BORDER));
@@ -320,7 +325,7 @@ void nc_help_popup()
 	x = (COLS-menu_sizex)/2+1;
 	y = 3;
 
-	unpost_menu(menu); // E_POSTED from nc_get_user_choice
+	unpost_menu(menu[menu_i]); // E_POSTED from nc_get_user_choice
 	attron(COLOR_PAIR(COLOR_POPUP));
 	create_box( menu_sizey+3, menu_sizex+1, y-1, x-2);
 	for(i=0;strings[i];i++)
@@ -334,13 +339,14 @@ void nc_help_popup()
 	draw_menu_border();
 }
 
-int nc_get_user_choice(menu_entry *list)
+int nc_get_user_choice()
 {
-	int c,default_count;
-	default_count = ARRAY_SIZE(default_entries);
+	int c;
+
+	post_menu:
 
 	/* Post the menu */
-	if(post_menu(menu)!=E_OK)
+	if(post_menu(menu[menu_i])!=E_OK)
 	{
 		ERROR("post_menu - %s\n",strerror(errno));
 		goto error;
@@ -356,34 +362,42 @@ int nc_get_user_choice(menu_entry *list)
 		{
 			case 278:
 			case KEY_DOWN:
-				menu_driver(menu, REQ_DOWN_ITEM);
+				menu_driver(menu[menu_i], REQ_DOWN_ITEM);
 				break;
 			//case KEY_VOLUMEUP: TODO
 			case KEY_UP:
-				menu_driver(menu, REQ_UP_ITEM);
+				menu_driver(menu[menu_i], REQ_UP_ITEM);
 				break;
 			case KEY_NPAGE:
-				menu_driver(menu, REQ_SCR_DPAGE);
+				menu_driver(menu[menu_i], REQ_SCR_DPAGE);
 				break;
 			case KEY_PPAGE:
-				menu_driver(menu, REQ_SCR_UPAGE);
+				menu_driver(menu[menu_i], REQ_SCR_UPAGE);
 				break;
 			case HELP_KEY:
 				nc_help_popup();
-				return MENU_PROMPT;
+				goto post_menu;
+			case 'r':
+				unpost_menu(menu[menu_i]);
+				menu_i = (menu_i==0)?1:0;
+				goto post_menu;
 		}
 		wrefresh(menu_window);
 	}
 
-	// HACK: use c as temporary variable
-	c = item_index(current_item(menu));
-	if (c < default_count)
-		c= default_entries[c].num;
-	else if (c == default_count)
-		c = -5;
-	else
-		c = c - default_count + 1;
-	return c;
+	c = item_index(current_item(menu[menu_i]));
+	if (menu_i == 0)
+	{
+		if (c == 0)
+			c = MENU_DEFAULT;
+		else
+			c += 1;
+		return c;
+	}
+	else if (menu_i == 1)
+	{
+		return default_entries[c].num;
+	}
 
 	error:
 	return MENU_FATAL_ERROR;
