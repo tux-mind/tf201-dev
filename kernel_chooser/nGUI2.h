@@ -49,7 +49,8 @@
 	"    Up Arrow / Volume Up     - Go up an item",\
 	"    Down Arrow / Volume Down - Go down an item",\
 	"    Enter / Power            - Choose the selected item",\
-	"    H                        - open this help screen",\
+	"    H                        - Open this help screen",\
+	"    R                        - Toggle the reboot menu",\
 	"",\
 	"Configuration:",\
 	"    The default choice is /data/.kernel",\

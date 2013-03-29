@@ -44,8 +44,6 @@
 #include <termios.h>
 #include <ctype.h>
 
-#include <ncurses.h>
-
 #include "common3.h"
 #include "menu3.h"
 #include "kernel_chooser3.h"
