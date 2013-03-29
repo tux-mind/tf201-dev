@@ -137,17 +137,18 @@ int nc_init(void)
 	init_pair(COLOR_LOG_DEBUG, COLOR_CYAN, COLOR_BLACK);
 	init_pair(COLOR_LOG_WARN, COLOR_YELLOW, COLOR_BLACK);
 	init_pair(COLOR_LOG_ERROR, COLOR_RED, COLOR_BLACK);
+	init_pair(COLOR_MENU_BORDER, COLOR_BLACK, COLOR_BLUE);
+	init_pair(COLOR_MENU_TEXT, COLOR_WHITE, COLOR_BLUE);
+	init_pair(COLOR_MENU_TITLE, COLOR_CYAN, COLOR_BLUE);
 
 	/* Create messages window */
 	sizey = (LINES * MSG_HEIGHT_PERC)/100;
 	sizex = (COLS * MSG_WIDTH_PERC)/100;
 	messages_win = newwin(sizey-1,sizex,(LINES-sizey)+2,0);
 	scrollok(messages_win,TRUE);
-
 	mvhline(LINES-sizey+1,0,ACS_HLINE,sizex);
 
 	refresh();
-	attroff(COLOR_PAIR(COLOR_LOG_BORDER));
 	return 0;
 }
 
@@ -189,11 +190,13 @@ void draw_menu_border(void)
 	len = strlen(PROMPT);
 	attron(COLOR_PAIR(COLOR_MENU_BORDER));
 	create_box(startx,starty,menu_sizex+1,menu_sizey+3);
-	mvprintw(starty+1,startx + ((menu_sizex - len)/2),"%s",PROMPT);
-	mvhline(starty+2, startx, ACS_HLINE, menu_sizex);
+	mvhline(starty+2, startx+1, ACS_HLINE, menu_sizex);
 	mvaddch(starty+2,startx,ACS_LTEE);
 	mvaddch(starty+2,startx+menu_sizex+1,ACS_RTEE);
-	attroff(COLOR_PAIR(COLOR_MENU_BORDER));
+	attron(COLOR_PAIR(COLOR_MENU_TITLE));
+	mvprintw(starty+1,startx + ((menu_sizex - len)/2),"%s",PROMPT);
+	attroff(COLOR_PAIR(COLOR_MENU_TITLE));
+	wbkgd(menu_window,COLOR_PAIR(COLOR_MENU_TEXT));
 	wrefresh(menu_window);
 	refresh();
 }
@@ -264,8 +267,11 @@ int nc_compute_menu(menu_entry *list)
 	/* Set menu option not to show the description */
 	menu_opts_off(menu, O_SHOWDESC);
 
+	/* Change item color */
+	set_menu_back(menu, COLOR_PAIR(COLOR_MENU_TEXT));
+
 	/* Create the window to be associated with the menu */
-	menu_window = newwin( menu_sizey, menu_sizex, (LINES-menu_sizey)/2, (COLS-menu_sizex)/2);
+	menu_window = newwin( menu_sizey, menu_sizex, 5, (COLS-menu_sizex)/2);
 	if(!menu_window)
 	{
 		FATAL("newwin - %s\n",strerror(errno));
@@ -273,7 +279,7 @@ int nc_compute_menu(menu_entry *list)
 	}
 
 	keypad(menu_window, TRUE);
-	if(wattron(menu_window,COLOR_PAIR(COLOR_MENU_BORDER))==ERR)
+	if(wattron(menu_window,COLOR_PAIR(COLOR_MENU_TEXT))==ERR)
 		ERROR("wattron - %s\n",strerror(errno));
 	/* Set main window and sub window */
 	if(set_menu_win(menu, menu_window)==ERR)

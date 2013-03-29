@@ -2,8 +2,9 @@
 #Made for Smasher816, edit to your desires and setup
 
 #Various options
-export DEVELOPMENT=1 #enable DEVELOPMENT ifdefs in the code
+export DEVELOPMENT=1 #Enable DEVELOPMENT ifdefs in the code
 export NVFLASH=1 #Use nvflash instead of fastboot
+export VERSION=v3 #Change as needed 
 
 #Make sure the binaries are in your path
 #export PATH=$PATH:
@@ -23,10 +24,11 @@ unset CFLAGS
 unset CPPFLAGS
 unset CXXFLAGS
 unset LD_PRELOAD
+unset VISUAL #git commit does not like forking editors
 
 #Useful routines
 alias adbreboot='adb devices | sed -n 2p | grep -q device && echo -n "Press any key to reboot..." && read -sk1 && adb reboot; echo>/dev/null' #Press key to reboot, ignore if no device
-alias buildall="make clean &>/dev/null; make DEVELOPMENT=\$DEVELOPMENT v2 2>/dev/null && make initrd && adbreboot && make use_initrd" #full make cycle with clean,build,reboot,flash
+alias buildall="make clean &>/dev/null; make DEVELOPMENT=\$DEVELOPMENT \$VERSION 1>/dev/null && make initrd && adbreboot && make use_initrd" #full make cycle with clean,build,reboot,flash
 alias compiletest='inotifywait -m * -e close_write | while read line; do clear; make DEVELOPMENT=1 v2 1>/dev/null; done' #wait for a file change, output any build errors
 alias upload='git commit -a && git push' #upload changes to git
 alias cdroot='cd /media/arch/STORAGE/git/tf201-dev' #save the folder

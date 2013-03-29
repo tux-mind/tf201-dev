@@ -10,13 +10,21 @@
 #define MENU_DEFAULT	-5
 #define MENU_FATAL_ERROR	-6
 
+// colors
+#define COLOR_DEFAULT 0
+#define COLOR_LOG_DEBUG 1
+#define COLOR_LOG_WARN 2
+#define COLOR_LOG_ERROR 3
+#define COLOR_MENU_BORDER 4
+#define COLOR_MENU_TEXT 5
+#define COLOR_MENU_TITLE 6
+
 // percentage of screen used by the menu
-#define MENU_WIDTH_PERC 50
-#define MENU_HEIGHT_PERC 50
+#define MENU_WIDTH_PERC 80
+#define MENU_HEIGHT_PERC 65
 // percentage of screen used by the messages
 #define MSG_HEIGHT_PERC 25
 #define MSG_WIDTH_PERC 100
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
 #define WAIT_MESSAGE "Automatic boot in %2d..."
 #define TIMEOUT_BOOT 10 /* time to wait for the user to press a key */
@@ -31,6 +39,7 @@
 
 #define PROMPT "choose an option"
 
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
 int nc_compute_menu(menu_entry *list);
 int nc_init(void);

@@ -30,9 +30,9 @@
 #define COLOR_LOG_DEBUG 1
 #define COLOR_LOG_WARN 2
 #define COLOR_LOG_ERROR 3
-
-#define COLOR_LOG_BORDER 1
-#define COLOR_MENU_BORDER 3
+#define COLOR_MENU_BORDER 4
+#define COLOR_MENU_TEXT 5
+#define COLOR_MENU_TITLE 6
 
 // print helpers
 #define FATAL(x,args...)	{nc_push_message(COLOR_LOG_ERROR,"[FATAL]"," "x,##args);fatal_error=1;}
