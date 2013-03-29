@@ -25,13 +25,22 @@
 #define BG_CYAN			46
 #define BG_WHITE		47
 
+// colors
+#define COLOR_DEFAULT 0
+#define COLOR_LOG_DEBUG 1
+#define COLOR_LOG_WARN 2
+#define COLOR_LOG_ERROR 3
+
+#define COLOR_LOG_BORDER 1
+#define COLOR_MENU_BORDER 3
+
 // print helpers
-#define FATAL(x,args...)	do{nc_push_message_color(1,"[FATAL] "x,##args);fatal_error=1;}while(0)
-#define ERROR(x,args...) 	nc_push_message_color(1,"[ERROR] "x,##args)
-#define WARN(x,args...)		nc_push_message_color(3,"[WARN ] "x,##args)
-#define INFO(x,args...)		nc_push_message_color(0,"[INFO ] "x,##args)
+#define FATAL(x,args...)	{nc_push_message(COLOR_LOG_ERROR,"[FATAL]"," "x,##args);fatal_error=1;}
+#define ERROR(x,args...) 	nc_push_message(COLOR_LOG_ERROR,"[ERROR]"," "x,##args)
+#define WARN(x,args...)		nc_push_message(COLOR_LOG_WARN,"[WARN ]"," "x,##args)
+#define INFO(x,args...)		nc_push_message(COLOR_DEFAULT,"[INFO ]"," "x,##args)
 #ifdef DEVELOPMENT
-#define DEBUG(x,args...) 	nc_push_message_color(2,"[DEBUG] "x,##args)
+#define DEBUG(x,args...) 	nc_push_message(COLOR_LOG_DEBUG,"[DEBUG]"," "x,##args)
 #define SHELL // allow the user to drop into a shell provided by busybox
 #else
 #define DEBUG(x,args...)
@@ -42,5 +51,4 @@
 
 extern int fatal_error;
 
-void nc_push_message(char *,...);
-void nc_push_message_color(int, char *,...);
+void nc_push_message(int, char *, char *,...);

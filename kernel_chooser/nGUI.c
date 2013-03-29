@@ -110,9 +110,11 @@ int nc_init(void)
 	noecho();
 	curs_set(0);
 	keypad(stdscr, TRUE);
-	init_pair(1, COLOR_RED, COLOR_BLACK);
-	init_pair(2, COLOR_CYAN, COLOR_BLACK);
-	init_pair(3, COLOR_YELLOW, COLOR_BLACK);
+
+	// colors
+	init_pair(COLOR_LOG_DEBUG, COLOR_CYAN, COLOR_BLACK);
+	init_pair(COLOR_LOG_WARN, COLOR_YELLOW, COLOR_BLACK);
+	init_pair(COLOR_LOG_ERROR, COLOR_RED, COLOR_BLACK);
 
 	/* Create messages window */
 	sizey = (LINES * MSG_HEIGHT_PERC)/100;
@@ -120,7 +122,7 @@ int nc_init(void)
 	messages_win = newwin(sizey-2,sizex-2,(LINES-sizey)+1,1);
 	scrollok(messages_win,TRUE);
 
-	attron(COLOR_PAIR(2));
+	attron(COLOR_PAIR(COLOR_LOG_BORDER));
 	mvaddch(LINES-sizey,0,ACS_ULCORNER);
 	mvhline(LINES-sizey,1,ACS_HLINE,sizex-2);
 	mvaddch(LINES-sizey,sizex-1,ACS_URCORNER);
@@ -131,7 +133,7 @@ int nc_init(void)
 	mvvline(LINES-sizey+1,sizex-1,ACS_VLINE,sizey-2);
 	wrefresh(messages_win);
 	refresh();
-	attroff(COLOR_PAIR(2));
+	attroff(COLOR_PAIR(COLOR_LOG_BORDER));
 	return 0;
 }
 
@@ -167,7 +169,7 @@ void draw_menu_border(void)
 {
 	int startx,starty,cur_y,cur_x,len;
 	/* Print a border around the main window and print a title */
-	attron(COLOR_PAIR(1));
+	attron(COLOR_PAIR(COLOR_MENU_BORDER));
 	getbegyx(menu_window,starty,startx);
 	len = strlen(PROMPT);
 	cur_y=starty-1;
@@ -190,7 +192,7 @@ void draw_menu_border(void)
 	mvaddch(cur_y,cur_x,ACS_LRCORNER);
 	wrefresh(menu_window);
 	refresh();
-	attroff(COLOR_PAIR(1));
+	attroff(COLOR_PAIR(COLOR_MENU_BORDER));
 }
 
 int nc_compute_menu(menu_entry *list)
@@ -268,7 +270,7 @@ int nc_compute_menu(menu_entry *list)
 	}
 
 	keypad(menu_window, TRUE);
-	if(wattron(menu_window,COLOR_PAIR(1))==ERR)
+	if(wattron(menu_window,COLOR_PAIR(COLOR_MENU_BORDER))==ERR)
 		ERROR("wattron - %s\n",strerror(errno));
 	/* Set main window and sub window */
 	if(set_menu_win(menu, menu_window)==ERR)
@@ -340,7 +342,7 @@ int nc_get_user_choice(menu_entry *list)
 	return MENU_FATAL_ERROR;
 }
 
-void nc_push_message_color(int i, char *fmt,...)
+void nc_push_message(int i, char *prefix, char *fmt,...)
 {
 	va_list ap;
 
@@ -349,16 +351,11 @@ void nc_push_message_color(int i, char *fmt,...)
 
 	va_start(ap,fmt);
 	wattron(messages_win, COLOR_PAIR(i));
-	vwprintw(messages_win,fmt,ap);
+	wprintw(messages_win,prefix);
 	wattroff(messages_win, COLOR_PAIR(i));
+	vwprintw(messages_win,fmt,ap);
 	wrefresh(messages_win);
 	va_end(ap);
-	refresh();
-}
-
-void nc_push_message(char *fmt,...)
-{
-	nc_push_message_color(0, fmt);
 }
 
 void nc_wait_enter(void)
