@@ -10,16 +10,6 @@
 #define MENU_DEFAULT		-5
 #define MENU_FATAL_ERROR	-6
 
-// colors
-#define COLOR_DEFAULT 0
-#define COLOR_LOG_DEBUG 1
-#define COLOR_LOG_WARN 2
-#define COLOR_LOG_ERROR 3
-#define COLOR_MENU_BORDER 4
-#define COLOR_MENU_TEXT 5
-#define COLOR_MENU_TITLE 6
-#define COLOR_POPUP 7
-
 // percentage of screen used by the menu
 #define MENU_WIDTH_PERC 80
 #define MENU_HEIGHT_PERC 65
@@ -30,7 +20,7 @@
 #define WAIT_MESSAGE "Automatic boot in %2d..."
 #define TIMEOUT_BOOT 10 /* time to wait for the user to press a key */
 
-#define HEADER_LEFT "kernel_chooser v2"
+#define HEADER_LEFT "kernel_chooser v3"
 #define HEADER_RIGHT "github.com/tux-mind/tf201-dev/kernel_chooser"
 
 #define HELP_KEY 'h'
@@ -61,7 +51,6 @@
 	"    CMDLINE",\
 	"",\
 	"    For descriptions of the items and example configs, please check the github webpage",\
-	"",\
 	"",\
 	"",\
 	"",\

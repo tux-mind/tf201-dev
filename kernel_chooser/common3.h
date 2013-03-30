@@ -33,14 +33,15 @@
 #define COLOR_MENU_BORDER 4
 #define COLOR_MENU_TEXT 5
 #define COLOR_MENU_TITLE 6
+#define COLOR_POPUP 7
 
 // print helpers
-#define FATAL(x,args...)	{nc_push_message(COLOR_LOG_ERROR,"[FATAL]"," "x,##args);fatal_error=1;}
-#define ERROR(x,args...) 	nc_push_message(COLOR_LOG_ERROR,"[ERROR]"," "x,##args)
-#define WARN(x,args...)		nc_push_message(COLOR_LOG_WARN,"[WARN ]"," "x,##args)
-#define INFO(x,args...)		nc_push_message(COLOR_DEFAULT,"[INFO ]"," "x,##args)
+#define FATAL(x,args...)	{nc_push_message(COLOR_LOG_ERROR,"[FATAL]",x,##args);fatal_error=1;}
+#define ERROR(x,args...) 	nc_push_message(COLOR_LOG_ERROR,"[ERROR]",x,##args)
+#define WARN(x,args...)		nc_push_message(COLOR_LOG_WARN,"[WARN ]",x,##args)
+#define INFO(x,args...)		nc_push_message(COLOR_DEFAULT,"[INFO ]",x,##args)
 #ifdef DEVELOPMENT
-#define DEBUG(x,args...) 	nc_push_message(COLOR_LOG_DEBUG,"[DEBUG]"," "x,##args)
+#define DEBUG(x,args...) 	nc_push_message(COLOR_LOG_DEBUG,"[DEBUG]",x,##args)
 #define SHELL // allow the user to drop into a shell provided by busybox
 #else
 #define DEBUG(x,args...)
