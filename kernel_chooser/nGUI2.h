@@ -10,6 +10,11 @@
 #define MENU_DEFAULT		-5
 #define MENU_FATAL_ERROR	-6
 
+// menu screens
+#define MENU_COUNT 2
+#define MENU_MAIN  0
+#define MENU_POWER 1
+
 // percentage of screen used by the menu
 #define MENU_WIDTH_PERC 80
 #define MENU_HEIGHT_PERC 65
