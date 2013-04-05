@@ -52,4 +52,4 @@
 
 extern int fatal_error;
 
-void nc_push_message(int, char *, char *,...);
+int nc_push_message(int, char *, char *,...);

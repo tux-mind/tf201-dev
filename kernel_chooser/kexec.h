@@ -431,7 +431,6 @@ extern int file_types;
 //from other files
 char *zlib_decompress_file(const char *, off_t *);
 char *lzma_decompress_file(const char *, off_t *);
-void press_enter(void);
 
 /*
 #define OPT_HELP		'h'

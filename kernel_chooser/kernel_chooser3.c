@@ -43,6 +43,7 @@
 #include <sys/reboot.h>
 #include <termios.h>
 #include <ctype.h>
+#include <unistd.h>
 
 #include "common3.h"
 #include "menu3.h"
@@ -375,10 +376,15 @@ int open_console(void)
 	return 0;
 }
 
+/* wait for user to press enter
+ * used in cases when ncurses is not active
+ */
 void press_enter(void)
 {
-	INFO("press <ENTER> to continue...\n");
-	nc_wait_enter();
+	printf("press <ENTER> to continue...");
+	fflush(stdout);
+	char garbage[MAX_LINE];
+	fgets(garbage,MAX_LINE,stdin); //ncurses is gone now
 }
 
 int parse_data_directory(menu_entry **list)
@@ -409,7 +415,6 @@ int parse_data_directory(menu_entry **list)
 					chdir("/");
 					return -1;
 				}
-				press_enter();
 				continue;
 			}
 		}
@@ -439,12 +444,22 @@ int wait_for_device(char *blkdev)
 	return 0;
 }
 
+void cleanup(int data_dir_to_parse, menu_entry *list) {
+	if(data_dir_to_parse)
+		umount("/data");
+	else
+		nc_destroy_menu();
+	if (list)
+		free_list(list);
+	nc_destroy();
+}
+
 void init_reboot(int magic)
 {
 	// this could use a lot more cleanup (unmount, etc)
+	cleanup(0,NULL);
 	reboot(magic); // codes are: RB_AUTOBOOT, RB_HALT_SYSTEM, RB_POWER_OFF, etc
 	FATAL("cannot reboot/shutdown\n");
-	exit(-1);
 }
 
 void reboot_recovery(void)
@@ -480,6 +495,7 @@ int main(int argc, char **argv, char **envp)
 	fatal_error = data_dir_to_parse = 1;
 
 	// mount sys
+	mkdir("/sys", 0700);
 	if(mount("sysfs","/sys","sysfs",MS_RELATIME,""))
 		goto error;
 	// open the console
@@ -543,9 +559,6 @@ menu_prompt:
 	//take_console_control();
 skip_menu:
 	DEBUG("user chose %d\n",i);
-#ifdef DEVELOPMENT
-	press_enter();
-#endif
 	// decide what to do
 	switch (i)
 	{
@@ -565,7 +578,7 @@ skip_menu:
 			init_reboot(RB_AUTOBOOT);
 			goto error;
 		case MENU_HALT:
-			init_reboot(RB_HALT_SYSTEM);
+			init_reboot(RB_POWER_OFF);
 			goto error;
 		case MENU_RECOVERY:
 			reboot_recovery();
@@ -612,14 +625,8 @@ skip_menu:
 	// we made it, time to clean up and kexec
 	INFO("booting \"%s\"\n",item->name);
 
-	#ifdef DEVELOPMENT
-	press_enter();
-	#endif
-	free_list(list);
-	if(!data_dir_to_parse)
-		nc_destroy_menu();
-	nc_destroy();
 	umount("/proc");
+	cleanup(data_dir_to_parse, list);
 	if(!fork())
 	{
 		k_exec(); // bye bye
@@ -628,21 +635,22 @@ skip_menu:
 	wait(NULL); // should not return on success
 	take_console_control();
 	//make sure that user read this
-	for(i=0;i<50;i++)
-		printf("01001000\n01000101\n01001100\n01010000\n\n\n"); // "HELP" lol
+	printf("\033[2J\033[Hkexec call failed! Time to reboot :(\n");
 	press_enter();
 	exit(EXIT_FAILURE); // kernel panic here
 
 error:
-	press_enter();
 	if(!fatal_error)
 		goto menu_prompt;
-	if(data_dir_to_parse)
-		umount("/data");
-	else
-		nc_destroy_menu();
-	free_list(list);
-	nc_destroy();
-	umount("/proc");
+	cleanup(data_dir_to_parse, list);
+
+#ifdef SHELL
+	printf("\033[2J\033[Han unrecoverable error occured! Dropping to an emergency shell\n\n");
+	shell();
+#else
+	printf("\033[2J\033[Han unrecoverable error occured! Time to panic and exit :(\n");
+	press_enter();
+#endif
+
 	exit(EXIT_FAILURE);
 }

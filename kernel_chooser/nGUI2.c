@@ -182,6 +182,12 @@ void nc_destroy(void)
 	 * we have to find why this happens
 	 * NOTE: btw, kernel saying that all memory has freed...strange behaviour.
 	 */
+
+#ifdef DEVELOPMENT
+	if (nc_push_message(COLOR_LOG_ERROR,"\nWE ARE LEAVING NCURSES NOW!","Last chance to see this output. press <ENTER> to continue...\n") == 0)
+		nc_wait_enter(); //don't wait if we can't print the message
+#endif
+
 	clear();
 	endwin();
 }
@@ -424,12 +430,12 @@ int nc_get_user_choice()
 	return MENU_FATAL_ERROR;
 }
 
-void nc_push_message(int i, char *prefix, char *fmt,...)
+int nc_push_message(int i, char *prefix, char *fmt,...)
 {
 	va_list ap;
 
 	if(!messages_win)
-		return;
+		return ERR;
 
 	va_start(ap,fmt);
 	wattron(messages_win, COLOR_PAIR(i));
@@ -438,6 +444,7 @@ void nc_push_message(int i, char *prefix, char *fmt,...)
 	vwprintw(messages_win,fmt,ap);
 	wrefresh(messages_win);
 	va_end(ap);
+	return 0;
 }
 
 void nc_wait_enter(void)
