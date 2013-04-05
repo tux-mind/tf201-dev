@@ -444,7 +444,8 @@ int wait_for_device(char *blkdev)
 	return 0;
 }
 
-void cleanup(int data_dir_to_parse, menu_entry *list) {
+void cleanup(int data_dir_to_parse, menu_entry *list)
+{
 	if(data_dir_to_parse)
 		umount("/data");
 	else
@@ -486,6 +487,19 @@ void shell(void)
 }
 #endif
 
+void screenshot()
+{
+	nc_save();
+	pid_t pid;
+	if (!(pid = fork())) {
+		take_console_control();
+		execl("/bin/busybox","cp", "-p", "/dev/fb0", "/data/fb0.dump", NULL);
+	}
+	waitpid(pid,NULL,0);
+	take_console_control();
+	nc_load();
+}
+
 int main(int argc, char **argv, char **envp)
 {
 	int i,data_dir_to_parse;
@@ -494,7 +508,11 @@ int main(int argc, char **argv, char **envp)
 	// errors before open_console are fatal
 	fatal_error = data_dir_to_parse = 1;
 
-	// mount sys
+	/* mount sys
+	 * if the initrd does not contain /sys, make it for them
+	 * we want to try as hard as we can to open the console
+	 * without the console we can not communicate to the user
+	 */
 	mkdir("/sys", 0700);
 	if(mount("sysfs","/sys","sysfs",MS_RELATIME,""))
 		goto error;
@@ -590,6 +608,16 @@ skip_menu:
 			nc_load();
 			goto menu_prompt;
 #endif
+		case MENU_SCREENSHOT:
+			if(mount(DATA_DEV,"/data","ext4",0,""))
+			{
+				ERROR("mounting %s on \"/data\" - %s\n",DATA_DEV,strerror(errno));
+				goto error;
+			}
+			screenshot();
+			DEBUG("Framebuffer saved to /data/fb0.dump\n");
+			umount("/data");
+			goto menu_prompt;
 		default: // parsed config
 			item=get_item_by_id(list,i);
 	}

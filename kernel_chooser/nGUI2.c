@@ -197,7 +197,7 @@ void nc_destroy(void)
 void nc_save() {
 	unpost_menu(menu[menu_i]); // will repost when we get back
 	def_prog_mode();
-	endwin();
+	nc_destroy();
 }
 
 /* restore curses state */
@@ -408,6 +408,8 @@ int nc_get_user_choice()
 				else
 					menu_i = MENU_POWER;
 				goto post_menu;
+			case '=':
+				return MENU_SCREENSHOT;
 		}
 		wrefresh(menu_window);
 	}
