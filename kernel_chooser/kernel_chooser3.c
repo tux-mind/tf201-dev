@@ -376,17 +376,6 @@ int open_console(void)
 	return 0;
 }
 
-/* wait for user to press enter
- * used in cases when ncurses is not active
- */
-void press_enter(void)
-{
-	printf("press <ENTER> to continue...");
-	fflush(stdout);
-	char garbage[MAX_LINE];
-	fgets(garbage,MAX_LINE,stdin); //ncurses is gone now
-}
-
 int parse_data_directory(menu_entry **list)
 {
 	DIR *dir;
@@ -476,6 +465,7 @@ void reboot_recovery(void)
 #ifdef SHELL
 void shell(void)
 {
+	fflush(stdout);
 	char *sh_argv[] = SHELL_ARGS;
 	pid_t pid;
 	if (!(pid = fork())) {
@@ -525,14 +515,15 @@ int main(int argc, char **argv, char **envp)
 	umount("/sys");
 	if(nc_init())
 		goto error;
-	INFO("mounting /proc\n");
+
+	nc_status("mounting /proc");
 	// mount proc ( required by kexec )
 	if(mount("proc","/proc","proc",MS_RELATIME,""))
 	{
 		FATAL("cannot mount proc\n");
 		goto error;
 	}
-	INFO("mounting /data\n");
+	nc_status("mounting /data");
 	// mount DATA_DEV partition into /data
 	if(mount(DATA_DEV,"/data","ext4",0,""))
 	{
@@ -604,6 +595,7 @@ skip_menu:
 #ifdef SHELL
 		case MENU_SHELL:
 			nc_save();
+			printf("\033[2J\033[H"); // clear the screen
 			shell();
 			nc_load();
 			goto menu_prompt;
@@ -663,8 +655,7 @@ skip_menu:
 	wait(NULL); // should not return on success
 	take_console_control();
 	//make sure that user read this
-	printf("\033[2J\033[Hkexec call failed! Time to reboot :(\n");
-	press_enter();
+	nc_error("kexec call failed!");
 	exit(EXIT_FAILURE); // kernel panic here
 
 error:
@@ -672,13 +663,13 @@ error:
 		goto menu_prompt;
 	cleanup(data_dir_to_parse, list);
 
+/* // uncomment this if you want, it may be useful, but it can also be annoying.
 #ifdef SHELL
-	printf("\033[2J\033[Han unrecoverable error occured! Dropping to an emergency shell\n\n");
+	printf("\033[2J\033[HAn error occurred during development. Dropping to an emergency shell.\n\n");
 	shell();
-#else
-	printf("\033[2J\033[Han unrecoverable error occured! Time to panic and exit :(\n");
-	press_enter();
-#endif
+#endif*/
 
+	printf("Kernel panic in 10 seconds...");
+	fflush(stdout);
 	exit(EXIT_FAILURE);
 }

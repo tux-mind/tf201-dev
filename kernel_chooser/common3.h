@@ -36,14 +36,15 @@
 #define COLOR_POPUP 7
 
 // print helpers
-#define FATAL(x,args...)	{nc_push_message(COLOR_LOG_ERROR,"[FATAL]",x,##args);fatal_error=1;}
+#define FATAL(x,args...)	{nc_error(x,##args);fatal_error=1;}
 #define ERROR(x,args...) 	nc_push_message(COLOR_LOG_ERROR,"[ERROR]",x,##args)
 #define WARN(x,args...)		nc_push_message(COLOR_LOG_WARN,"[WARN ]",x,##args)
-#define INFO(x,args...)		nc_push_message(COLOR_DEFAULT,"[INFO ]",x,##args)
 #ifdef DEVELOPMENT
+#define INFO(x,args...)		nc_push_message(COLOR_DEFAULT,"[INFO ]",x,##args)
 #define DEBUG(x,args...) 	nc_push_message(COLOR_LOG_DEBUG,"[DEBUG]",x,##args)
 #define SHELL // allow the user to drop into a shell provided by busybox
 #else
+#define INFO(x,args...)
 #define DEBUG(x,args...)
 #endif
 
@@ -53,3 +54,5 @@
 extern int fatal_error;
 
 int nc_push_message(int, char *, char *,...);
+void nc_error(char *,...);
+void nc_status(char *);

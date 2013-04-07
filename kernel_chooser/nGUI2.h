@@ -20,7 +20,7 @@
 #define MENU_WIDTH_PERC 80
 #define MENU_HEIGHT_PERC 65
 // percentage of screen used by the messages
-#define MSG_HEIGHT_PERC 25
+#define MSG_HEIGHT_PERC 15
 #define MSG_WIDTH_PERC 100
 
 #define WAIT_MESSAGE "Automatic boot in %2d..."
@@ -63,6 +63,7 @@
 	NULL\
 }
 
+#define FATAL_TITLE "An unrecoverable error occured!"
 #define PRESS_ENTER "press <ENTER> to continue..."
 #define PROMPT "choose an option"
 

@@ -18,6 +18,7 @@ export LIB_DIR=$TOOLCHAIN_DIR/lib
 TOOLCHAIN="$TOOLCHAIN_DIR/bin/arm-unknown-linux-gnueabi"
 export CC=$TOOLCHAIN-gcc
 export LD=$TOOLCHAIN-LD
+export ARCH=arm
 
 #These can cause issues
 unset CFLAGS

@@ -131,22 +131,19 @@ int nc_init(void)
 
 	/* Initialize colors */
 	start_color();
-	init_pair(COLOR_LOG_DEBUG, COLOR_CYAN, COLOR_BLACK);
-	init_pair(COLOR_LOG_WARN, COLOR_YELLOW, COLOR_BLACK);
-	init_pair(COLOR_LOG_ERROR, COLOR_RED, COLOR_BLACK);
+	use_default_colors();
+	init_pair(COLOR_LOG_DEBUG, COLOR_CYAN, -1);
+	init_pair(COLOR_LOG_WARN, COLOR_YELLOW, -1);
+	init_pair(COLOR_LOG_ERROR, COLOR_RED, -1);
 	init_pair(COLOR_MENU_BORDER, COLOR_BLACK, COLOR_BLUE);
 	init_pair(COLOR_MENU_TEXT, COLOR_WHITE, COLOR_BLUE);
 	init_pair(COLOR_MENU_TITLE, COLOR_CYAN, COLOR_BLUE);
 	init_pair(COLOR_POPUP, COLOR_WHITE, COLOR_RED);
 
-	/* Print title */
-	mvprintw(0,0,"%s",HEADER_LEFT);
-	mvprintw(0,COLS-strlen(HEADER_RIGHT),"%s",HEADER_RIGHT);
-
 	/* Create messages window */
 	sizey = (LINES * MSG_HEIGHT_PERC)/100;
 	sizex = (COLS * MSG_WIDTH_PERC)/100;
-	mvhline(LINES-sizey+1,0,ACS_HLINE,sizex);
+	//mvhline(LINES-sizey+1,0,ACS_HLINE,sizex);
 	messages_win = newwin(sizey-1,sizex,(LINES-sizey)+2,0);
 	scrollok(messages_win,TRUE);
 
@@ -197,7 +194,7 @@ void nc_destroy(void)
 void nc_save() {
 	unpost_menu(menu[menu_i]); // will repost when we get back
 	def_prog_mode();
-	nc_destroy();
+	endwin();
 }
 
 /* restore curses state */
@@ -284,6 +281,10 @@ int nc_compute_menu(menu_entry *list)
 		}
 	items[MENU_MAIN][entries_count-default_count] = new_item(NULL,NULL);
 
+	/* Print title */
+	mvprintw(0,0,"%s",HEADER_LEFT);
+	mvprintw(0,COLS-strlen(HEADER_RIGHT),"%s",HEADER_RIGHT);
+
 	/* Create the window to be associated with the menu */
 	menu_window = newwin( menu_sizey, menu_sizex, 5, (COLS-menu_sizex)/2);
 	if(!menu_window)
@@ -342,6 +343,48 @@ int nc_compute_menu(menu_entry *list)
 	return -1;
 }
 
+/* An error occurred, alert the user
+ * If ncurses is active, create a popup
+ * Otherwise, write with printf
+ * If the console is not actived, there is nothing we can do
+ */
+void nc_error(char *fmt, ...)
+{
+	va_list ap;
+	char msg[COLS];
+
+	va_start(ap,fmt);
+	vsprintf(msg, fmt, ap);
+	va_end(ap);
+
+	if (messages_win)
+	{
+		int x, y, width;
+		width = strlen(msg)-1;
+		if (msg[width] == '\n')
+			msg[width] = '\0';
+		if (width < strlen(FATAL_TITLE))
+			width = strlen(FATAL_TITLE);
+		x = (COLS-width)/2;
+		y = (LINES-4)/2;
+		attron(COLOR_PAIR(COLOR_POPUP));
+		create_box( 6, width+3, y-1, x-2);
+		mvprintw(y+0,x,FATAL_TITLE);
+		mvprintw(y+2,x,msg);
+		mvprintw(y+4,x,PRESS_ENTER);
+		nc_wait_enter();
+	}
+	else
+	{
+		printf("\033[2J\033[H%s\n\n",FATAL_TITLE);
+		printf("%s\n\n",msg);
+		printf("press <ENTER> to continue...");
+		fflush(stdout);
+		char garbage[MAX_LINE];
+		fgets(garbage,MAX_LINE,stdin);
+	}
+}
+
 void nc_help_popup()
 {
 	int x, y, i;
@@ -351,10 +394,10 @@ void nc_help_popup()
 
 	unpost_menu(menu[menu_i]); // E_POSTED from nc_get_user_choice
 	attron(COLOR_PAIR(COLOR_POPUP));
-	create_box( menu_sizey+3, menu_sizex+1, y-1, x-2);
+	create_box( menu_sizey+3, menu_sizex*(3/4)+1, y-1, x-2);
 	for(i=0;strings[i];i++)
 	{
-		mvprintw(y+i,x,"%s",strings[i]);
+		mvprintw(y+i,x,strings[i]);
 	}
 	mvprintw(y+i+1,(COLS-strlen(PRESS_ENTER))/2,PRESS_ENTER);
 	
@@ -452,6 +495,15 @@ int nc_push_message(int i, char *prefix, char *fmt,...)
 void nc_wait_enter(void)
 {
 	while(getch() != 10);
+}
+
+void nc_status(char *msg)
+{
+	int x, y;
+	y = (LINES/2)-1;
+	x = (COLS - strlen(msg))/2;
+	mvprintw(y,x,msg);
+	refresh();
 }
 
 /** wait for a keypress while coutdown.
