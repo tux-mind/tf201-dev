@@ -8,6 +8,7 @@
 
 #include "common3.h"
 #include "menu3.h"
+#include "fbGUI.h"
 #include "nGUI2.h"
 
 int	menu_i, menu_sizex, // size fo the menu_window ( getmaxyx does not work )
@@ -284,6 +285,8 @@ int nc_compute_menu(menu_entry *list)
 	/* Print title */
 	mvprintw(0,0,"%s",HEADER_LEFT);
 	mvprintw(0,COLS-strlen(HEADER_RIGHT),"%s",HEADER_RIGHT);
+	refresh();
+	fb_crefresh(0,0,COLS,1);
 
 	/* Create the window to be associated with the menu */
 	menu_window = newwin( menu_sizey, menu_sizex, 5, (COLS-menu_sizex)/2);
@@ -336,6 +339,9 @@ int nc_compute_menu(menu_entry *list)
 	mvprintw(7+menu_sizey,(COLS-ARRAY_SIZE(HELP_MESSAGE))/2,HELP_MESSAGE);
 	attroff(COLOR_PAIR(COLOR_LOG_ERROR));
 	refresh();
+	fb_crefresh((COLS-ARRAY_SIZE(HELP_MESSAGE))/2,7+menu_sizey,strlen(HELP_MESSAGE),1);
+
+	//fb_crefresh(0,0,COLS,LINES); //redraw the whole background
 
 	return 0;
 	error:
@@ -394,7 +400,7 @@ void nc_help_popup()
 
 	unpost_menu(menu[menu_i]); // E_POSTED from nc_get_user_choice
 	attron(COLOR_PAIR(COLOR_POPUP));
-	create_box( menu_sizey+3, menu_sizex*(3/4)+1, y-1, x-2);
+	create_box( menu_sizey+3, menu_sizex+1, y-1, x-2);
 	for(i=0;strings[i];i++)
 	{
 		mvprintw(y+i,x,strings[i]);
@@ -421,6 +427,8 @@ int nc_get_user_choice()
 	wrefresh(menu_window);
 	wrefresh(messages_win);
 	refresh();
+
+	//fb_crefresh((COLS-menu_sizex)/2-1, 2, menu_sizex+2, menu_sizey+4);
 
 	while((c = wgetch(menu_window)) != 10)
 	{
@@ -478,6 +486,7 @@ int nc_get_user_choice()
 int nc_push_message(int i, char *prefix, char *fmt,...)
 {
 	va_list ap;
+	int sizex, sizey;
 
 	if(!messages_win)
 		return ERR;
@@ -489,6 +498,11 @@ int nc_push_message(int i, char *prefix, char *fmt,...)
 	vwprintw(messages_win,fmt,ap);
 	wrefresh(messages_win);
 	va_end(ap);
+
+	sizey = (LINES * MSG_HEIGHT_PERC)/100;
+	sizex = (COLS * MSG_WIDTH_PERC)/100;
+	fb_crefresh(0,(LINES-sizey)+2,sizex,sizey-2);
+
 	return 0;
 }
 

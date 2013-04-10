@@ -47,6 +47,7 @@
 
 #include "common3.h"
 #include "menu3.h"
+#include "fbGUI.h"
 #include "kernel_chooser3.h"
 
 // if == 1 => someone called FATAL we have to exit
@@ -515,6 +516,9 @@ int main(int argc, char **argv, char **envp)
 	umount("/sys");
 	if(nc_init())
 		goto error;
+
+	fb_init();
+	fb_background();
 
 	nc_status("mounting /proc");
 	// mount proc ( required by kexec )

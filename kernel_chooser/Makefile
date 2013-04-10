@@ -22,9 +22,9 @@ ifdef LIB_DIR
 	LDFLAGS:=-L$(LIB_DIR) $(LDFLAGS)
 endif
 
-all: v2 initrd use_initrd
+all: v3 initrd use_initrd
 
-v3: kernel_chooser3.c menu3.o nGUI2.o kexec.o lzma.o zlib.o sha256.o
+v3: kernel_chooser3.c menu3.o fbGUI.o nGUI2.o kexec.o lzma.o zlib.o sha256.o
 	$(CC) $(CFLAGS) -o $(TARGET_BIN) $? $(LDFLAGS)
 
 v2: kernel_chooser2.c menu3.o nGUI.o kexec.o lzma.o zlib.o sha256.o
