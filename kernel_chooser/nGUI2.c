@@ -118,7 +118,7 @@ int nc_init(void)
 		items[menu_i] = NULL;
 		menu[menu_i] = NULL;
 	}
-	
+
 	messages_win = menu_window = NULL;
 	local_entries = NULL;
 	entries_count = 0;
@@ -167,7 +167,7 @@ void nc_destroy_menu(void)
 		}
 		free(items[menu_i]);
 	}
-	
+
 	delwin(menu_window);
 	free(local_entries);
 }
@@ -202,7 +202,7 @@ void nc_save() {
 void nc_load() {
 	reset_prog_mode();
 	keypad(stdscr, true);
-	refresh();	
+	refresh();
 }
 
 void draw_menu_border(void)
@@ -245,7 +245,7 @@ int nc_compute_menu(menu_entry *list)
 	items[MENU_MAIN] = (ITEM **)malloc((n_choices+1)*sizeof(ITEM *));
 	items[MENU_POWER] = (ITEM **)malloc((default_count+1)*sizeof(ITEM *));
 	local_entries = malloc((n_choices+default_count+1)*sizeof(char *));
-	if( !local_entries) //!items ||
+	if( !local_entries || !items[MENU_MAIN] || !items[MENU_POWER])
 	{
 		FATAL("malloc - %s\n",strerror(errno));
 		goto error;
@@ -386,8 +386,7 @@ void nc_error(char *fmt, ...)
 		printf("%s\n\n",msg);
 		printf("press <ENTER> to continue...");
 		fflush(stdout);
-		char garbage[MAX_LINE];
-		fgets(garbage,MAX_LINE,stdin);
+		fgets(msg,COLS,stdin);
 	}
 }
 
@@ -406,7 +405,7 @@ void nc_help_popup()
 		mvprintw(y+i,x,strings[i]);
 	}
 	mvprintw(y+i+1,(COLS-strlen(PRESS_ENTER))/2,PRESS_ENTER);
-	
+
 	nc_wait_enter();
 	attron(COLOR_PAIR(COLOR_MENU_BORDER));
 	draw_menu_border();
@@ -469,11 +468,9 @@ int nc_get_user_choice()
 	c = item_index(current_item(menu[menu_i]));
 	if (menu_i == MENU_MAIN)
 	{
-		if (c == 0)
-			c = MENU_DEFAULT;
-		else
-			c += 1;
-		return c;
+		if(c)
+			return c+1;
+		return MENU_DEFAULT;
 	}
 	else if (menu_i == MENU_POWER)
 	{
@@ -534,7 +531,11 @@ int nc_wait_for_keypress(void)
 	y = (LINES/2)-1;
 	x = (COLS - len)/2;
 
-	timeout(1000); // wait one second between keypress checks
+	/* this set an internal timeout for the getch() call.
+	 * 'man 3 timeout' for more info.
+	 * wait one second between keypress checks
+	*/
+	timeout(1000);
 
 	for (timeout=TIMEOUT_BOOT; timeout>0; timeout--) {
 		mvprintw(y,x,WAIT_MESSAGE, timeout);
