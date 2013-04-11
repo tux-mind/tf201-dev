@@ -1,3 +1,5 @@
+#include <linux/input.h>
+
 /* our functions return integers
  * i known that a char it's an int value,
  * but user can have an entry ID which have the same value of a char.
@@ -16,6 +18,10 @@
 #define MENU_MAIN  0
 #define MENU_POWER 1
 
+#define HELP_KEY 'h'
+#define MENU_TOGGLE_KEY KEY_TAB
+#define SCREENSHOT_KEY '='
+
 // percentage of screen used by the menu
 #define MENU_WIDTH_PERC 80
 #define MENU_HEIGHT_PERC 65
@@ -29,7 +35,6 @@
 #define HEADER_LEFT "kernel_chooser v3"
 #define HEADER_RIGHT "github.com/tux-mind/tf201-dev/kernel_chooser"
 
-#define HELP_KEY 'h'
 #define HELP_MESSAGE "Press [h] for help"
 #define HELP_PAGE 	\
 {\
@@ -45,8 +50,8 @@
 	"    Up Arrow / Volume Up     - Go up an item",\
 	"    Down Arrow / Volume Down - Go down an item",\
 	"    Enter / Power            - Choose the selected item",\
+	"    Tab -                    - Toggle the reboot menu",\
 	"    H                        - Open this help screen",\
-	"    R                        - Toggle the reboot menu",\
 	"",\
 	"Configuration:",\
 	"    The default choice is /data/.kernel",\

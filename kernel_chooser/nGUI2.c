@@ -336,10 +336,10 @@ int nc_compute_menu(menu_entry *list)
 	attroff(COLOR_PAIR(COLOR_MENU_BORDER));
 
 	attron(COLOR_PAIR(COLOR_LOG_ERROR));
-	mvprintw(7+menu_sizey,(COLS-ARRAY_SIZE(HELP_MESSAGE))/2,HELP_MESSAGE);
+	mvprintw(7+menu_sizey,(COLS-strlen(HELP_MESSAGE))/2,HELP_MESSAGE);
 	attroff(COLOR_PAIR(COLOR_LOG_ERROR));
 	refresh();
-	fb_crefresh((COLS-ARRAY_SIZE(HELP_MESSAGE))/2,7+menu_sizey,strlen(HELP_MESSAGE),1);
+	fb_crefresh((COLS-strlen(HELP_MESSAGE))/2,7+menu_sizey,strlen(HELP_MESSAGE),1);
 
 	//fb_crefresh(0,0,COLS,LINES); //redraw the whole background
 
@@ -449,17 +449,18 @@ int nc_get_user_choice()
 			case KEY_PPAGE:
 				menu_driver(menu[menu_i], REQ_SCR_UPAGE);
 				break;
+			case KEY_POWER:
 			case HELP_KEY:
 				nc_help_popup();
 				goto post_menu;
-			case 'r':
+			case MENU_TOGGLE_KEY:
 				unpost_menu(menu[menu_i]);
 				if (menu_i == MENU_POWER)
 					menu_i = MENU_MAIN;
 				else
 					menu_i = MENU_POWER;
 				goto post_menu;
-			case '=':
+			case SCREENSHOT_KEY:
 				return MENU_SCREENSHOT;
 		}
 		wrefresh(menu_window);
@@ -526,16 +527,19 @@ void nc_status(char *msg)
  */
 int nc_wait_for_keypress(void)
 {
-	int x,y,timeout;
+	int x,y,timeout,len;
+
+	len = snprintf(NULL,0,WAIT_MESSAGE,0)
 
 	y = (LINES/2)-1;
-	x = (COLS - snprintf(NULL,0,WAIT_MESSAGE,0))/2;
+	x = (COLS - len)/2;
 
 	timeout(1000); // wait one second between keypress checks
 
 	for (timeout=TIMEOUT_BOOT; timeout>0; timeout--) {
 		mvprintw(y,x,WAIT_MESSAGE, timeout);
 		refresh();
+		fb_crefresh(x,y,len,1);
 		if (getch() != ERR) {
 			mvprintw(y,x,"%*s",COLS-x-1," ");
 			return 0;
