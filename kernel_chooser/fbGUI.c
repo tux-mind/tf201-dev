@@ -6,6 +6,7 @@
 #include <linux/input.h>
 #include <linux/fb.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <stdint.h>
 
 #include "common3.h"
@@ -110,11 +111,10 @@ void fb_refresh(int x, int y, int w, int h)
 {
 	long int offset,area;
 	int i,j,sizeof_pixel;
-	pixel pix;
 	uint8_t *src,*dst,*new_bg,black_pixel[] = {0,0,0,0};
 
 	//compute affected area
-	area = (h*fbinfo.fbinfo.line_length) + (x*(fbinfo.vinfo.bits_per_pixel/8));
+	area = (h*fbinfo.finfo.line_length) + (x*(fbinfo.vinfo.bits_per_pixel/8));
 
 	if(!(new_bg=malloc(area))) {
 		FATAL("malloc - %s\n",strerror(errno));

@@ -47,7 +47,6 @@
 
 #include "common3.h"
 #include "menu3.h"
-#include "fbGUI.h"
 #include "kernel_chooser3.h"
 
 // if == 1 => someone called FATAL we have to exit

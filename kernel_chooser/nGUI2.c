@@ -5,10 +5,11 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <wait.h>
+#include <linux/input.h>
+#include <stdint.h>
 
 #include "common3.h"
 #include "menu3.h"
-#include "fbGUI.h"
 #include "nGUI2.h"
 
 int	menu_i, menu_sizex, // size fo the menu_window ( getmaxyx does not work )
@@ -526,7 +527,7 @@ int nc_wait_for_keypress(void)
 {
 	int x,y,timeout,len;
 
-	len = snprintf(NULL,0,WAIT_MESSAGE,0)
+	len = snprintf(NULL,0,WAIT_MESSAGE,0);
 
 	y = (LINES/2)-1;
 	x = (COLS - len)/2;

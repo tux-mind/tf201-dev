@@ -50,9 +50,18 @@
 
 #define MAX_LINE 255
 #define COMMAND_LINE_SIZE    1024
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
 extern int fatal_error;
 
+/* from nGUI.c */
 int nc_push_message(int, char *, char *,...);
 void nc_error(char *,...);
 void nc_status(char *);
+
+/* from fbGUI.c */
+void fb_init(void);
+void fb_destroy(void);
+void fb_background(void);
+void fb_refresh(int,int,int,int);
+void fb_crefresh(int,int,int,int);

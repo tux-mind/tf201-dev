@@ -1,5 +1,3 @@
-#include <linux/input.h>
-
 /* our functions return integers
  * i known that a char it's an int value,
  * but user can have an entry ID which have the same value of a char.
@@ -71,8 +69,6 @@
 #define FATAL_TITLE "An unrecoverable error occured!"
 #define PRESS_ENTER "press <ENTER> to continue..."
 #define PROMPT "choose an option"
-
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
 int nc_compute_menu(menu_entry *list);
 int nc_init(void);
