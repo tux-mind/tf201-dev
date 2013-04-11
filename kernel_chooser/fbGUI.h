@@ -1,7 +1,3 @@
-#include <linux/fb.h>
-#include <sys/mman.h>
-#include <stdint.h>
-
 #define FBDEV "/dev/fb0"
 #define BACKGROUND "/background.bmp" //can put on /data to allow the user to set their own background
 #define BITMAP_DEPTH 24

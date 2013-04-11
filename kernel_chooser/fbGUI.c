@@ -4,6 +4,9 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <linux/input.h>
+#include <linux/fb.h>
+#include <sys/mman.h>
+#include <stdint.h>
 
 #include "common3.h"
 #include "fbGUI.h"
@@ -45,8 +48,9 @@ void fb_background()
 {
 	int fd, start, rowsize;
 	int width, height, x, y;
-	uint8_t *dest;
-	pixel *pixels;
+	uint8_t *dest,*source;
+	pixel *pos;
+	struct stat bg_stat;
 
 	if(!(fd = open(BACKGROUND,O_RDONLY)))
 	{
@@ -54,61 +58,85 @@ void fb_background()
 		WARN("cannot open \"%s\" - %s\n",BACKGROUND,strerror(errno));
 		return;
 	}
+	stat(BACKGROUND,&bg_stat); // this will not fail ( open succeded )
+	if(!(source = malloc(bg_stat.st_size)))
+	{
+		FATAL("malloc - %s\n",strerror(errno));
+		return;
+	}
+	read(fd,source,bg_stat.st_size); // read it once! ( we need to optimize disk access )
+	close(fd);
+	memcpy(&start,(source + 10),4);
+	memcpy(&width,(source + 18),4);
+	memcpy(&height,(source + 22),4);
 
-	pread(fd, &start,  4, 0x0A);
-	pread(fd, &width,  4, 0x12);
-	pread(fd, &height, 4, 0x16);
-
+	// @smasher: does it came from empirical measurament? or there is some rule/law ?
 	rowsize = ((BITMAP_DEPTH*width+31)/32)*4; //round to multiple of 4
-	pixels = malloc(rowsize);
 	bkgdp = malloc (screensize);
 
-	if (!pixels || !bkgdp)
+	if (!bkgdp)
 	{
 		FATAL("malloc - %s\n",strerror(errno));
 		return;
 	}
 
 	dest = bkgdp + (fbinfo.vinfo.xoffset)*(fbinfo.vinfo.bits_per_pixel/8) + (fbinfo.vinfo.yoffset)*fbinfo.finfo.line_length;
+	pos = (pixel *)(source + start + (rowsize*height));
 	for (y=0; y<height; y++) {
-		pread(fd, pixels, rowsize, start+rowsize*(height-y));
 		for (x=0; x<width; x++) {
-			*(dest + 0) = pixels[x].r;
-			*(dest + 1) = pixels[x].g;
-			*(dest + 2) = pixels[x].b;
+			*dest = pos[x].r;
+			*(dest + 1) = pos[x].g;
+			*(dest + 2) = pos[x].b;
 			*(dest + 3) = 0; //alpha
 			dest += fbinfo.vinfo.bits_per_pixel/8; //4
 		}
+		pos -= rowsize;
 	}
+	free(source);
 
 	memcpy(fbinfo.fbp, bkgdp, screensize); // copy the background to the screen
 }
 
 pixel getpixel(uint8_t *src)
 {
-	pixel pix;
-	pix.r = *(src + 0);
+	static pixel pix;
+	pix.r = *src;
 	pix.g = *(src + 1);
 	pix.b = *(src + 2);
 	return pix;
 }
 
-//TODO: THIS IS REALLY LAGGY with large ammounts of pixels to check
 void fb_refresh(int x, int y, int w, int h)
 {
-	long int offset;
-	int i,j;
+	long int offset,area;
+	int i,j,sizeof_pixel;
 	pixel pix;
+	uint8_t *src,*dst,*new_bg,black_pixel[] = {0,0,0,0};
 
-	offset = (x+fbinfo.vinfo.xoffset)*(fbinfo.vinfo.bits_per_pixel/8) + (y+fbinfo.vinfo.yoffset)*fbinfo.finfo.line_length;
-	for (j=0; j<h; j++) {
-		for (i=0; i<w; i++) {
-			pix = getpixel(fbinfo.fbp + offset + i*4);
-			if ((pix.r + pix.g + pix.b) == 0) //only replace black
-				memcpy(fbinfo.fbp+offset+i*4, bkgdp+offset+i*4, fbinfo.vinfo.bits_per_pixel/8);
-		}
-		offset += fbinfo.finfo.line_length; //go down a line
+	//compute affected area
+	area = (h*fbinfo.fbinfo.line_length) + (x*(fbinfo.vinfo.bits_per_pixel/8));
+
+	if(!(new_bg=malloc(area))) {
+		FATAL("malloc - %s\n",strerror(errno));
+		return;
 	}
+
+	sizeof_pixel = ARRAY_SIZE(black_pixel);
+	offset = (x+fbinfo.vinfo.xoffset)*(fbinfo.vinfo.bits_per_pixel/8) + (y+fbinfo.vinfo.yoffset)*fbinfo.finfo.line_length;
+	// save our affected background into new_bg
+	memcpy(new_bg,fbinfo.fbp + offset,area);
+	src = bkgdp + offset;
+	dst = new_bg;
+	for(j=0;j<h;j++) {
+		for(i=0;i<w;i++)
+			if(!memcmp(dst +i,black_pixel,sizeof_pixel)) // found a black pixel
+				*(dst+i) = *(src+i); // copy from our background
+		src += fbinfo.finfo.line_length; //go down a line
+		dst += fbinfo.finfo.line_length;
+	}
+	//write once
+	memcpy(fbinfo.fbp + offset,new_bg,area);
+	free(new_bg);
 }
 
 // wrapper to use row and col for text output
