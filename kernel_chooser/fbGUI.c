@@ -48,7 +48,7 @@ void fb_destroy()
 void fb_background()
 {
 	int fd, start, rowsize;
-	int width, height, x, y;
+	int width, height, depth, x, y;
 	uint8_t *dest,*source;
 	pixel *pos;
 	struct stat bg_stat;
@@ -70,6 +70,7 @@ void fb_background()
 	memcpy(&start,(source + 10),4);
 	memcpy(&width,(source + 18),4);
 	memcpy(&height,(source + 22),4);
+	memcpy(&depth,(source + 28),2);
 
 	rowsize = ((BITMAP_DEPTH*width+31)/32)*4; //round to multiple of 4
 	rowsize /= sizeof(pixel);
@@ -78,6 +79,13 @@ void fb_background()
 	if (!bkgdp)
 	{
 		FATAL("malloc - %s\n",strerror(errno));
+		return;
+	}
+
+	//TODO: handle other formats
+	if (depth != BITMAP_DEPTH)
+	{
+		WARN("Background must be a %i bit .bmp file\n", BITMAP_DEPTH);
 		return;
 	}
 
