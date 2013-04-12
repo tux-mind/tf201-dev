@@ -42,7 +42,8 @@ void fb_destroy()
 {
 	munmap(fbinfo.fbp, screensize);
 	close(fbinfo.fbfd);
-	free(bkgdp);
+	if(bkgdp)
+		free(bkgdp);
 }
 
 void fb_background()
@@ -72,6 +73,16 @@ void fb_background()
 	memcpy(&height,(source + 22),4);
 	memcpy(&depth,(source + 28),2);
 
+
+	//TODO: handle other formats
+	if (depth != BITMAP_DEPTH)
+	{
+		WARN("Background must be a %i bit .bmp file\n", BITMAP_DEPTH);
+		DEBUG("found a %d depth file\n",depth);
+		bkgdp = NULL; // this means that we don't have a background
+		//return; FIXME: on my background depth will be 196632, but without this check i can draw it fine.
+	}
+
 	rowsize = ((BITMAP_DEPTH*width+31)/32)*4; //round to multiple of 4
 	rowsize /= sizeof(pixel);
 	bkgdp = malloc (screensize);
@@ -82,12 +93,6 @@ void fb_background()
 		return;
 	}
 
-	//TODO: handle other formats
-	if (depth != BITMAP_DEPTH)
-	{
-		WARN("Background must be a %i bit .bmp file\n", BITMAP_DEPTH);
-		return;
-	}
 
 	dest = bkgdp + (fbinfo.vinfo.xoffset)*(fbinfo.vinfo.bits_per_pixel/8) + (fbinfo.vinfo.yoffset)*fbinfo.finfo.line_length;
 	pos = ((pixel *)(source + start)) + rowsize*height;
@@ -118,8 +123,12 @@ pixel getpixel(uint8_t *src)
 void fb_refresh(int x, int y, int w, int h)
 {
 	long int offset,area;
-	int i,j,sizeof_pixel,bytes_per_pixel;
-	uint8_t *src,*dst,*new_bg, black_pixel[] = {0,0,0,0};
+	int bytes_per_pixel;
+	uint8_t *src,*dst,*pos,*send,*dend,*new_bg, black_pixel[] = {0,0,0,0};
+
+	// exit if we don't have a background
+	if(!bkgdp)
+		return;
 
 	bytes_per_pixel=(fbinfo.vinfo.bits_per_pixel/8);
 
@@ -139,19 +148,25 @@ void fb_refresh(int x, int y, int w, int h)
 		return;
 	}
 
-	sizeof_pixel = sizeof(pixel);
-	offset = (x+fbinfo.vinfo.xoffset)*(fbinfo.vinfo.bits_per_pixel/8) + (y+fbinfo.vinfo.yoffset)*fbinfo.finfo.line_length;
+	offset = (x+fbinfo.vinfo.xoffset)*bytes_per_pixel + (y+fbinfo.vinfo.yoffset)*fbinfo.finfo.line_length;
 	// save our affected background into new_bg
 	memcpy(new_bg,fbinfo.fbp + offset,area);
 	src = bkgdp + offset;
 	dst = new_bg;
+	send = src + area;
+	dend = new_bg + area;
 
-	for(j=0;j<h;j++) {
-		for(i=0;i<w;i+=bytes_per_pixel) // walking the line
-			if(!memcmp(dst+i,black_pixel,sizeof_pixel)) // found a black pixel
-				memcpy(dst+i,src+i,bytes_per_pixel); // copy from our background
-		src += fbinfo.finfo.line_length; //go down a line
-		dst += fbinfo.finfo.line_length;
+	for(;src<send;) {
+		//walk the line unntil a black pixel is found
+		for(;src<send && memcmp(dst,black_pixel,bytes_per_pixel);src+=bytes_per_pixel,dst+=bytes_per_pixel);
+		//walk the line until a non-black pixel is found
+		for(pos=dst;pos<dend && !memcmp(pos,black_pixel,bytes_per_pixel);pos+=bytes_per_pixel);
+		if(pos>dst)
+		{
+			memcpy(dst,src,pos-dst);
+			src+=(pos-dst);
+			dst=pos;
+		}
 	}
 
 	//write once

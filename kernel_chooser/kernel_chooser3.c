@@ -395,7 +395,6 @@ int parse_data_directory(menu_entry **list)
 	while((d = readdir(dir)) != NULL)
 		if(d->d_type != DT_DIR)
 		{
-			DEBUG("parsing %s\n",d->d_name);
 			if(parser(d->d_name,d->d_name,list))
 			{
 				if(fatal_error)
