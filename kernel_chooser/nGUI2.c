@@ -136,9 +136,9 @@ int nc_init(void)
 	init_pair(COLOR_LOG_DEBUG, COLOR_CYAN, -1);
 	init_pair(COLOR_LOG_WARN, COLOR_YELLOW, -1);
 	init_pair(COLOR_LOG_ERROR, COLOR_RED, -1);
-	init_pair(COLOR_MENU_BORDER, COLOR_BLACK, COLOR_BLUE);
-	init_pair(COLOR_MENU_TEXT, COLOR_WHITE, COLOR_BLUE);
-	init_pair(COLOR_MENU_TITLE, COLOR_CYAN, COLOR_BLUE);
+	init_pair(COLOR_MENU_BORDER, COLOR_RED, COLOR_BLACK);
+	init_pair(COLOR_MENU_TEXT, COLOR_WHITE, COLOR_BLACK);
+	init_pair(COLOR_MENU_TITLE, COLOR_CYAN, COLOR_BLACK);
 	init_pair(COLOR_POPUP, COLOR_WHITE, COLOR_RED);
 
 	/* Create messages window */
@@ -339,9 +339,9 @@ int nc_compute_menu(menu_entry *list)
 	mvprintw(7+menu_sizey,(COLS-strlen(HELP_MESSAGE))/2,HELP_MESSAGE);
 	attroff(COLOR_PAIR(COLOR_LOG_ERROR));
 	refresh();
-	fb_crefresh((COLS-strlen(HELP_MESSAGE))/2,7+menu_sizey,strlen(HELP_MESSAGE),1);
+	//fb_crefresh((COLS-strlen(HELP_MESSAGE))/2,7+menu_sizey,strlen(HELP_MESSAGE),1);
 
-	//fb_crefresh(0,0,COLS,LINES); //redraw the whole background
+	fb_crefresh(0,0,COLS,LINES); //redraw the whole background
 
 	return 0;
 	error:
@@ -427,7 +427,7 @@ int nc_get_user_choice()
 	wrefresh(messages_win);
 	refresh();
 
-	//fb_crefresh((COLS-menu_sizex)/2-1, 2, menu_sizex+2, menu_sizey+4);
+	fb_crefresh((COLS-menu_sizex)/2-1, 2, menu_sizex+2, menu_sizey+4);
 
 	while((c = wgetch(menu_window)) != 10)
 	{
@@ -462,6 +462,7 @@ int nc_get_user_choice()
 				return MENU_SCREENSHOT;
 		}
 		wrefresh(menu_window);
+		fb_crefresh((COLS-menu_sizex)/2-1, 2, menu_sizex+2, menu_sizey+4);
 	}
 
 	c = item_index(current_item(menu[menu_i]));

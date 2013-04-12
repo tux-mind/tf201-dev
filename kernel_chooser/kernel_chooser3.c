@@ -517,7 +517,6 @@ int main(int argc, char **argv, char **envp)
 		goto error;
 
 	fb_init();
-	fb_background();
 
 	nc_status("mounting /proc");
 	// mount proc ( required by kexec )
@@ -533,7 +532,16 @@ int main(int argc, char **argv, char **envp)
 		FATAL("mounting %s on \"/data\" - %s\n",DATA_DEV,strerror(errno));
 		goto error;
 	}
+
 	fatal_error=0;
+
+	fb_background();
+	if(fatal_error)
+	{
+		FATAL("fatal error occourred in fb_background() - %s\n",strerror(errno));
+		goto error;
+	}
+
 	// check for a default entry
 	if(parser(DEFAULT_CONFIG,DEFAULT_CONFIG_NAME,&list) && fatal_error)
 	{
