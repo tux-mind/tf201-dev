@@ -113,11 +113,19 @@ void fb_refresh(int x, int y, int w, int h)
 	int i,j,sizeof_pixel;
 	uint8_t *src,*dst,*new_bg,black_pixel[] = {0,0,0,0};
 
+	//convert values into bytes
+	w*=(fbinfo.vinfo.bits_per_pixel/8);
+
 	//compute affected area
-	area = (h*fbinfo.finfo.line_length) + (x*(fbinfo.vinfo.bits_per_pixel/8));
+	area = (h*fbinfo.finfo.line_length);
+	//TODO: test this ( it works only if print out of the screen )
+	if(x+w>fbinfo.finfo.line_length) {
+		x=0;
+		w=fbinfo.finfo.line_length;
+	}
 
 	if(!(new_bg=malloc(area))) {
-		FATAL("malloc - %s\n",strerror(errno));
+		fatal_error=1; // we cannot print, or we will recursive called infinite times.
 		return;
 	}
 
@@ -127,13 +135,19 @@ void fb_refresh(int x, int y, int w, int h)
 	memcpy(new_bg,fbinfo.fbp + offset,area);
 	src = bkgdp + offset;
 	dst = new_bg;
+
 	for(j=0;j<h;j++) {
-		for(i=0;i<w;i++)
+		for(i=0;i<w;i++) // walking the line
 			if(!memcmp(dst +i,black_pixel,sizeof_pixel)) // found a black pixel
 				*(dst+i) = *(src+i); // copy from our background
+		//debug: sign first column with red
+		*(dst + 0) = 255;
+		*(dst + 1) = 0;
+		*(dst + 2) = 0;
 		src += fbinfo.finfo.line_length; //go down a line
 		dst += fbinfo.finfo.line_length;
 	}
+
 	//write once
 	memcpy(fbinfo.fbp + offset,new_bg,area);
 	free(new_bg);

@@ -1,5 +1,5 @@
 #define FBDEV "/dev/fb0"
-#define BACKGROUND "/background.bmp" //can put on /data to allow the user to set their own background
+#define BACKGROUND "/data/background.bmp" //can put on /data to allow the user to set their own background
 #define BITMAP_DEPTH 24
 #define CHAR_WIDTH 8
 #define CHAR_HEIGHT 16

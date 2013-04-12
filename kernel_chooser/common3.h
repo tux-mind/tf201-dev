@@ -63,5 +63,4 @@ void nc_status(char *);
 void fb_init(void);
 void fb_destroy(void);
 void fb_background(void);
-void fb_refresh(int,int,int,int);
 void fb_crefresh(int,int,int,int);
