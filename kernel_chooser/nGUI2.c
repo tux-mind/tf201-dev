@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <wait.h>
-#include <linux/input.h>
 #include <stdint.h>
 
 #include "common3.h"
@@ -449,7 +448,6 @@ int nc_get_user_choice()
 			case KEY_PPAGE:
 				menu_driver(menu[menu_i], REQ_SCR_UPAGE);
 				break;
-			case KEY_POWER:
 			case HELP_KEY:
 				nc_help_popup();
 				goto post_menu;

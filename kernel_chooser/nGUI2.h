@@ -17,7 +17,7 @@
 #define MENU_POWER 1
 
 #define HELP_KEY 'h'
-#define MENU_TOGGLE_KEY KEY_TAB
+#define MENU_TOGGLE_KEY 'r'
 #define SCREENSHOT_KEY '='
 
 // percentage of screen used by the menu
