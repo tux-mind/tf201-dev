@@ -59,20 +59,20 @@ void fb_background()
 		WARN("cannot open \"%s\" - %s\n",BACKGROUND,strerror(errno));
 		return;
 	}
-	stat(BACKGROUND,&bg_stat); // this will not fail ( open succeded )
+	fstat(fd,&bg_stat); // this will not fail ( open succeded )
 	if(!(source = malloc(bg_stat.st_size)))
 	{
 		FATAL("malloc - %s\n",strerror(errno));
 		return;
 	}
-	read(fd,source,bg_stat.st_size); // read it once! ( we need to optimize disk access )
+	start = read(fd,source,bg_stat.st_size); // read it once! ( we need to optimize disk access )
 	close(fd);
 	memcpy(&start,(source + 10),4);
 	memcpy(&width,(source + 18),4);
 	memcpy(&height,(source + 22),4);
 
-	// @smasher: does it came from empirical measurament? or there is some rule/law ?
 	rowsize = ((BITMAP_DEPTH*width+31)/32)*4; //round to multiple of 4
+	rowsize /= sizeof(pixel);
 	bkgdp = malloc (screensize);
 
 	if (!bkgdp)
@@ -82,7 +82,7 @@ void fb_background()
 	}
 
 	dest = bkgdp + (fbinfo.vinfo.xoffset)*(fbinfo.vinfo.bits_per_pixel/8) + (fbinfo.vinfo.yoffset)*fbinfo.finfo.line_length;
-	pos = (pixel *)(source + start + (rowsize*height));
+	pos = ((pixel *)(source + start)) + rowsize*height;
 	for (y=0; y<height; y++) {
 		for (x=0; x<width; x++) {
 			*dest = pos[x].r;
