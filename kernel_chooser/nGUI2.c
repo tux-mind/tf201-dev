@@ -431,7 +431,7 @@ int nc_get_user_choice()
 
 	while((c = wgetch(menu_window)) != 10)
 	{
-		DEBUG("key %i (%c)\n", c, c);
+		//DEBUG("key %i (%c)\n", c, c);
 		switch(c)
 		{
 			case 278:
@@ -489,13 +489,13 @@ int nc_push_message(int i, char *prefix, char *fmt,...)
 	if(!messages_win)
 		return ERR;
 
-	va_start(ap,fmt);
 	wattron(messages_win, COLOR_PAIR(i));
 	wprintw(messages_win,"%s ",prefix);
 	wattroff(messages_win, COLOR_PAIR(i));
-	vwprintw(messages_win,fmt,ap);
-	wrefresh(messages_win);
+	va_start(ap,fmt);
+	vw_printw(messages_win,fmt,ap);
 	va_end(ap);
+	wrefresh(messages_win);
 
 	sizey = (LINES * MSG_HEIGHT_PERC)/100;
 	sizex = (COLS * MSG_WIDTH_PERC)/100;
