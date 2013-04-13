@@ -44,5 +44,8 @@ use_initrd:
 	cp $(INITRD).gz ../test/initramfs.gz
 	../scripts/reflash_kernel.sh
 
+use_recovery:
+	../scripts/make_recovery_zip.sh
+
 clean:
 	rm -f $(TARGET_BIN) *.o
