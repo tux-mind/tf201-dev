@@ -295,7 +295,15 @@ int parser(char *file, char *fallback_name, menu_entry **list)
 	}
 	fgets_fix(name_line);
 	fgets_fix(line);
-	name_len = strlen(name_line);
+	//check that name/description is printable ( ncurses menu will fail otherwise )
+	// http://en.wikipedia.org/wiki/ASCII#ASCII_printable_characters
+	//HACK: use name_len as counter, just to do 2 things in one loop ;)
+	for(name_len=0;name_line[name_len]!='\0';name_len++)
+	  if(name_line[name_len] <  0x20 || name_line[name_len] > 0x7E)
+	  {
+	    WARN("file \"%s\" have unprintable characters in name/description\n",file);
+	    return -1;
+	  }
 	if(!name_len) // no name
 	{
 		WARN("file \"%s\" don't have a DESCRIPTION/NAME\n",file);

@@ -414,6 +414,9 @@ void nc_help_popup()
 int nc_get_user_choice()
 {
 	int c;
+#if DEVELOPMENT
+	static int hits_printed = 0;
+#endif
 
 	post_menu:
 
@@ -431,7 +434,7 @@ int nc_get_user_choice()
 
 	while((c = wgetch(menu_window)) != 10)
 	{
-		//DEBUG("key %i (%c)\n", c, c);
+		DEBUG("print #%d\n", hits_printed++);
 		switch(c)
 		{
 			case 278:
@@ -492,6 +495,7 @@ int nc_push_message(int i, char *prefix, char *fmt,...)
 	wattron(messages_win, COLOR_PAIR(i));
 	wprintw(messages_win,"%s ",prefix);
 	wattroff(messages_win, COLOR_PAIR(i));
+	wrefresh(messages_win);
 	va_start(ap,fmt);
 	vw_printw(messages_win,fmt,ap);
 	va_end(ap);
