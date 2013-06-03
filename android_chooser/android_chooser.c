@@ -20,13 +20,11 @@
  *
  * 1) read configuration from kernel commandline ( newandroid=blkdev:initrd_path:fstab_path )
  * 2) extract android initrd over NEWROOT
- * 3) run android udev chrooted into NEWROOT
- * 4) read fstab file ( /android/mountpoint /path/to/image/file )
- * 5) find what android blockdevices handle our mountpoints
- * 6) associate fs files to loop devices
- * 7) wait that android blockdevices has been found by udev
- * 8) replace the android blockdevices with symlinks to loop devices
- * 9) chroot into NEWROOT and start the android init process
+ * 3) read fstab file ( /android/mountpoint /path/to/image/file )
+ * 4) find what android blockdevices handle our mountpoints
+ * 5) associate fs files to loop devices
+ * 6) replace the android blockdevices with the loop devices in the android fstab
+ * 7) chroot into NEWROOT and start the android init process
  * 
  * TODO: android init will start udev again, check if it overwrite our hack.
  */
@@ -292,7 +290,7 @@ int parser(char *line,char **blkdev, char **initrd_path, char **fstab_path)
 	*(*fstab_path + DATADIR_STRLEN+i) = '\0';
 	return 0; // all ok
 }
-
+/*
 pid_t start_android_udev(void)
 {
 	pid_t udev_pid;
@@ -358,7 +356,7 @@ int wait_devices(pid_t udev_pid, mountpoint *list)
 	}
 	return 0;
 }
-
+*/
 int loop_binder(mountpoint *list)
 {
 	int retries,done,ret;
@@ -503,7 +501,7 @@ int main(int argc, char **argv, char **envp)
 			*init_argv[] = { "/init", NULL}; // init argv 
 	const char *android_fstab;
 	int i; // general purpose integer
-	pid_t udev_pid;			// the pid of android_udev process
+	//pid_t udev_pid;			// the pid of android_udev process
 	mountpoint *list = NULL;
 
 	android_fstab = line = start = initrd_path = fstab_path = blkdev = NULL;
@@ -579,12 +577,13 @@ int main(int argc, char **argv, char **envp)
 		
 	}
 	free(initrd_path);
+	/*
 	//start android udev
 	if((udev_pid = start_android_udev()) < 0)
 	{
 		free(fstab_path);
 		EXIT_ERRNO("start_android_udev");
-	}
+	}*/
 	//parse fstab
 	if(fstab_parser(fstab_path,&list)) // only malloc troubles here ?
 	{
