@@ -131,6 +131,7 @@ int try_initrd_mount(char **file, const char *mountpoint)
 			}
 			free(cpio_archive);
 			len = strlen(mountpoint);
+			/* we have separate mountpoints in this version
 			free(*file);
 			*file = malloc((len+1)*sizeof(char));
 			if(!*file)
@@ -140,6 +141,7 @@ int try_initrd_mount(char **file, const char *mountpoint)
 			}
 			strncpy(*file,mountpoint,len);
 			(*file)[len] = '\0';
+			*/
 		}
 	}
 	return 0;

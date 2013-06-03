@@ -1,4 +1,7 @@
 #include "mountpoints.h"
+#include <stdio.h>
+#include <stdlib.h>
+
 
 void free_mounpoint(mountpoint *item)
 {
@@ -17,7 +20,7 @@ void free_list(mountpoint *list)
 {
 	mountpoint *current;
 	for(current=list;current;current=current->next)
-		free_entry(current);
+		free_mounpoint(current);
 }
 
 /* add a mountpoint in the list */
@@ -42,6 +45,7 @@ mountpoint *add_mountpoint(mountpoint *list, char *_android_mountpoint, char *_a
 	item->android_blkdev = _android_blkdev;
 	item->fake_file = _fake_file;
 	item->fake_blkdev = _fake_blkdev;
+	item->fake_blkdev_fd = item->blkdev_found = 0;
 	item->next = NULL;
 	return list;
 }

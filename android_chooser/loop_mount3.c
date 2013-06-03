@@ -53,13 +53,13 @@ int set_loop(const char *device, char *file,int *fd_to_close)
 
 	if ((ffd = open(file, O_RDWR)) < 0)
 	{
-		ERROR("cannot open \"%s\" - %s\n",file,strerror(errno));
+		fprintf(logfile,"cannot open \"%s\" - %s\n",file,strerror(errno));
 		return 1;
 	}
 	else if ((fd = open(device, O_RDWR)) < 0)
 	{
 		close(ffd);
-		ERROR("cannot open \"%s\" - %s\n",device,strerror(errno));
+		fprintf(logfile,"cannot open \"%s\" - %s\n",device,strerror(errno));
 		return 1;
 	}
 	memset(&loopinfo64, 0, sizeof(loopinfo64));
@@ -74,7 +74,7 @@ int set_loop(const char *device, char *file,int *fd_to_close)
 			return 2;
 		else
 		{
-			ERROR("cannot associate \"%s\" with \"%s\" - %s\n",file,device,strerror(errno));
+			fprintf(logfile,"cannot associate \"%s\" with \"%s\" - %s\n",file,device,strerror(errno));
 			return 1;
 		}
 	}
@@ -82,7 +82,7 @@ int set_loop(const char *device, char *file,int *fd_to_close)
 
 	if (ioctl(fd, LOOP_SET_STATUS64, &loopinfo64))
 	{
-		ERROR("ioctl: LOOP_SET_STATUS64 - %s\n",strerror(errno));
+		fprintf(logfile,"ioctl: LOOP_SET_STATUS64 - %s\n",strerror(errno));
 		ioctl (fd, LOOP_CLR_FD, 0);
 		close (fd);
 		return 1;
@@ -117,7 +117,7 @@ int try_loop_mount(char **loopfile, const char *mountpoint)
 
 	if(stat(*loopfile, &st))
 	{
-		ERROR("cannot stat \"%s\" - %s\n",*loopfile,strerror(errno));
+		fprintf(logfile,"cannot stat \"%s\" - %s\n",*loopfile,strerror(errno));
 		return 1;
 	}
 
@@ -131,7 +131,7 @@ int try_loop_mount(char **loopfile, const char *mountpoint)
 		umount(mountpoint);
 		if(mount(LOOP_DEVICE,mountpoint,"ext4",MS_LOOP,""))
 		{
-			ERROR("cannot mount \"%s\" on \"%s\" - %s\n",LOOP_DEVICE,mountpoint,strerror(errno));
+			fprintf(logfile,"cannot mount \"%s\" on \"%s\" - %s\n",LOOP_DEVICE,mountpoint,strerror(errno));
 			close(fd_to_close);
 			return 1;
 		}
@@ -141,7 +141,7 @@ int try_loop_mount(char **loopfile, const char *mountpoint)
 		*loopfile = malloc((res+1)*sizeof(char));
 		if(!*loopfile)
 		{
-			FATAL("malloc - %s\n",strerror(errno));
+			fprintf(logfile,"malloc - %s\n",strerror(errno));
 			return 1;
 		}
 		strncpy(*loopfile,mountpoint,res);
