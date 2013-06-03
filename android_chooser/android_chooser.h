@@ -3,11 +3,14 @@
 #define DATADIR "/newroot/.data/"
 #define DATADIR_STRLEN 15
 #define LOG "/newroot/android_chooser.log"
+#define PERSISTENT_LOG "/newroot/.data/android_chooser.log"
 #define BUSYBOX "/bin/busybox"
 #define MAX_LINE 255
 #define TIMEOUT 5 /* time to wait for external block devices ( USB stick ) */
 #define INIT_MAX_ARGS 15 /* maximum number of arguments for the real init */
 #define UDEV_PATH "/sbin/ueventd"
+#define FAKE_UDEV	"/bin/sleep"
+#define TMP_FSTAB	"/fstab.tmp"
 
 #if NEWROOT_STRLEN > MAX_LINE
 # error "NEWROOT_STRLEN must be shorter then MAX_LINE"

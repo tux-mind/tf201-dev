@@ -15,7 +15,7 @@ ifdef LIB_DIR
 	LDFLAGS:=-L$(LIB_DIR) $(LDFLAGS)
 endif
 
-all: v1 initrd
+all: v1 fake_ueventd initrd
 
 v1: android_chooser.c loop_mount3.o mountpoints.o initrd_mount.o zlib.o
 	$(CC) $(CFLAGS) $? $(LDFLAGS) -o $(TARGET_BIN)
@@ -23,6 +23,10 @@ v1: android_chooser.c loop_mount3.o mountpoints.o initrd_mount.o zlib.o
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+fake_ueventd: fake_ueventd.c
+	$(CC) $(CFLAGS) -O2 -o $@ $<
+	cp $@ "$(INITRD_DIR)/bin/sleep"
+	
 initrd:
 	cp $(TARGET_BIN) $(INITRD_DIR)/init
 	cd $(INITRD_DIR); find . | cpio --create --format='newc' > ../$(INITRD); gzip -f ../$(INITRD)
