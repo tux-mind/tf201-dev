@@ -26,7 +26,6 @@
  * 6) replace the android blockdevices with the loop devices in the android fstab
  * 7) chroot into NEWROOT and start the android init process
  * 
- * TODO: android init will start udev again, check if it overwrite our hack.
  */
 
 
