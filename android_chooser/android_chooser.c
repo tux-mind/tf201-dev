@@ -197,6 +197,7 @@ int find_android_blockdev(mountpoint *list,const char *android_fstab)
 				if(!current->android_blkdev)
 					return -1;
 				strncpy(current->android_blkdev,line,len1);
+				*(current->android_blkdev+len1) = '\0';
 			}
 	}
 	return 0;
