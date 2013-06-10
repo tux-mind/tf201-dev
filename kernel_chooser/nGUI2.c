@@ -414,9 +414,6 @@ void nc_help_popup()
 int nc_get_user_choice()
 {
 	int c;
-#if DEVELOPMENT
-	static int hits_printed = 0;
-#endif
 
 	post_menu:
 
@@ -434,7 +431,6 @@ int nc_get_user_choice()
 
 	while((c = wgetch(menu_window)) != 10)
 	{
-		DEBUG("print #%d\n", hits_printed++);
 		switch(c)
 		{
 			case 278:

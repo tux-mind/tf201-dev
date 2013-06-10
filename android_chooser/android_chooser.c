@@ -18,13 +18,7 @@
  *
  * android_chooser works as follow:
  *
- * 1) read configuration from kernel commandline ( newandroid=blkdev:initrd_path:fstab_path )
- * 2) extract android initrd over NEWROOT
- * 3) read fstab file ( /android/mountpoint /path/to/image/file )
- * 4) find what android blockdevices handle our mountpoints
- * 5) associate fs files to loop devices
- * 6) replace the android blockdevices with the loop devices in the android fstab
- * 7) chroot into NEWROOT and start the android init process
+ * TODO! - hacking is a funny thing but many times you have to restart from 0!
  * 
  */
 
@@ -47,26 +41,16 @@ FILE * logfile;
 #include "mountpoints.h"
 #include "android_chooser.h"
 
-//fatal error occourred, boot up android
-void fatal(char **argv,char **envp)
-{
-	//TODO: maybe we must make some error checking also there...
-	//lock android boot if wanna only adb
-#ifndef ADB
-	chdir(NEWROOT);
-#endif
-	chroot(NEWROOT);
-	execve("/init",argv,envp);
-}
-
 /* make /dev from /sys */
-void mdev(char **envp)
+void mdev(void)
 {
 	pid_t pid;
 	if(!(pid = fork()))
 	{
 		char *mdev_argv[] = MDEV_ARGS;
-		execve(BUSYBOX,mdev_argv,envp);
+		chdir(WORKING_DIR);
+		chroot(WORKING_DIR);
+		execv(BUSYBOX,mdev_argv);
 	}
 	waitpid(pid,NULL,0);
 }
@@ -89,7 +73,7 @@ int read_cmdline(char *dest)
 
 	memset(dest,'\0',COMMAND_LINE_SIZE);
 
-	if((fd = open("/proc/cmdline",O_RDONLY)) < 0)
+	if((fd = open("proc/cmdline",O_RDONLY)) < 0)
 		return -1;
 	if((read(fd, dest, COMMAND_LINE_SIZE*(sizeof(char)))) < 0)
 	{
@@ -152,7 +136,7 @@ const char *find_android_fstab(void)
 	struct dirent *de;
 	static char path[MAX_LINE];
 	
-	if(!(d=opendir(NEWROOT)))
+	if(!(d=opendir("/")))
 		return NULL;
 	while((de=readdir(d)))
 		if(de->d_type == DT_REG && !strncmp(de->d_name,"fstab.",5))
@@ -163,7 +147,7 @@ const char *find_android_fstab(void)
 		fprintf(logfile,"cannot find android_fstab\n");
 		return NULL;
 	}
-	snprintf(path,MAX_LINE,"%s%s",NEWROOT,de->d_name);
+	snprintf(path,MAX_LINE,"/%s",de->d_name);
 	return path;
 }
 
@@ -211,6 +195,8 @@ int find_android_blockdev(mountpoint *list,const char *android_fstab)
  *	1 if a malloc error occourred or
  *		if a parse error occourred.
  * 	if an error occour errno it's set to the corresponding error number.
+ * 
+ * in this version we mounted /dev on ./dev, just remove the first '/' char.
  */
 int parser(char *line,char **blkdev, char **initrd_path, char **fstab_path)
 {
@@ -221,8 +207,10 @@ int parser(char *line,char **blkdev, char **initrd_path, char **fstab_path)
 	for(pos=line;*pos!='\0'&&*pos!=' ';pos++);
 	*pos='\0';
 
-	// count args length
-	for(i=0,pos=line;*pos!=':'&&*pos!='\0';pos++)
+	// skip first '/'
+	for(pos=line;*pos!='\0'&&*pos=='/';pos++);
+	// count arg length
+	for(i=0;*pos!=':'&&*pos!='\0';pos++)
 		i++;
 	// check for arg length
 	if(!i)
@@ -235,7 +223,7 @@ int parser(char *line,char **blkdev, char **initrd_path, char **fstab_path)
 	if(!*blkdev)
 		return -1;
 	// copy string
-	strncpy(*blkdev,line,i);
+	strncpy(*blkdev,(pos-i),i);
 	*(*blkdev+i) = '\0';
 	// skip token
 	if(*pos==':')
@@ -290,73 +278,7 @@ int parser(char *line,char **blkdev, char **initrd_path, char **fstab_path)
 	*(*fstab_path + DATADIR_STRLEN+i) = '\0';
 	return 0; // all ok
 }
-/*
-pid_t start_android_udev(void)
-{
-	pid_t udev_pid;
-	char *argv[] = { UDEV_PATH, NULL };
-	
-	fflush(logfile);
-	if((udev_pid = fork()) < 0) // cannot fork
-		return -1;
-	else if(udev_pid > 0) // parent
-		return udev_pid;
-	//child
-	chdir(NEWROOT);
-	chroot(NEWROOT);
-	// do android init stuff...
-	mkdir("/dev", 0755);
-    mkdir("/proc", 0755);
-    mkdir("/sys", 0755);
 
-    mount("tmpfs", "/dev", "tmpfs", MS_NOSUID, "mode=0755");
-    mkdir("/dev/pts", 0755);
-    mkdir("/dev/socket", 0755);
-    mount("devpts", "/dev/pts", "devpts", 0, NULL);
-    mount("proc", "/proc", "proc", 0, NULL);
-    mount("sysfs", "/sys", "sysfs", 0, NULL);
-	execv("/init",argv);
-	exit(EXIT_FAILURE);
-}
-
-int wait_devices(pid_t udev_pid, mountpoint *list)
-{
-	int all_blocks_found;
-	char buffer[MAX_LINE];
-	mountpoint *current;
-	time_t timeout;
-	
-	waitpid(udev_pid,&all_blocks_found,WNOHANG);
-	if(WIFEXITED(all_blocks_found) && WEXITSTATUS(all_blocks_found))
-	{
-		fprintf(logfile,"failed to run android ueventd\n");
-		return -1;
-	}
-	
-	all_blocks_found = 0;
-	timeout = time(NULL) + TIMEOUT;
-	
-	do
-	{
-		for(all_blocks_found=1,current=list;current;current=current->next)
-			if(!current->blkdev_found)
-			{
-				snprintf(buffer,MAX_LINE,"%s%s",NEWROOT,current->android_blkdev);
-				if(access(buffer, R_OK))
-					all_blocks_found = 0;
-				else
-					current->blkdev_found = 1;
-			}
-		usleep(500000); // leave the CPU for udev too
-	}while(!all_blocks_found&&time(NULL)<timeout);
-	if(!all_blocks_found)
-	{
-		fprintf(logfile,"android_udev timed out!\n");
-		return -1;
-	}
-	return 0;
-}
-*/
 int loop_binder(mountpoint *list)
 {
 	int retries,done,ret;
@@ -374,7 +296,7 @@ int loop_binder(mountpoint *list)
 	for(done=retries=0;retries<3&&!done;retries++,sleep(1))
 		for(done=1,current=list;current;current=current->next)
 		{
-			snprintf(buffer,MAX_LINE,"/dev/%s",current->fake_blkdev);
+			snprintf(buffer,MAX_LINE,"dev/%s",current->fake_blkdev);
 			if((ret = set_loop(buffer,current->fake_file,&(current->fake_blkdev_fd))) == 2)
 				done = 0;
 			else if(ret == 1) // fatal error, remove this mountpoint
@@ -382,28 +304,6 @@ int loop_binder(mountpoint *list)
 		}
 	return 0;
 }
-/*
-int symlink_block_devices(mountpoint *list)
-{
-	mountpoint *current;
-	char buffer[MAX_LINE];
-	
-	for(current=list;current;current=current->next)
-	{
-		snprintf(buffer,MAX_LINE,"%s%s",NEWROOT,current->android_blkdev);
-		if(unlink(buffer))
-			fprintf(logfile,"cannot delete \"%s\" - %s\n",
-#ifdef DEBUG
-	buffer,strerror(errno));
-#else
-	current->android_blkdev,strerror(errno));
-#endif
-		else if(symlink(current->fake_blkdev,buffer))
-			fprintf(logfile,"cannot create a symlink \"%s\" -> \"%s\"\n",buffer,current->fake_blkdev);
-	}
-	//TODO: remove failed ones
-	return 0;
-}*/
 
 int copy(char *source,char*dest)
 {
@@ -431,19 +331,6 @@ int copy(char *source,char*dest)
 		return -1;
 	return 0;
 }
-/* 
-int substitute_android_udev(void)
-{
-	char buffer[MAX_LINE];
-	
-	snprintf(buffer,MAX_LINE,"%s%s",NEWROOT,UDEV_PATH);
-	if(unlink(buffer))
-	{
-		fprintf(logfile,"unable to remove \"%s\"\n",buffer);
-		return -1;
-	}
-	return copy(FAKE_UDEV,buffer);
-}*/
 
 int change_android_fstab(mountpoint *list,const char * android_fstab)
 {
@@ -491,46 +378,45 @@ int change_android_fstab(mountpoint *list,const char * android_fstab)
 	return 0;
 }
 
-int main(int argc, char **argv, char **envp)
+int main(int argc, char **argv)
 {
 	char *line,          	// where we place the readed line
             *start,			// where our args start
             *initrd_path,   // path to android initrd
 			*fstab_path,	// path to our fstab file
-            *blkdev,        // block device to mount on newroot
-			*init_argv[] = { "/init", NULL}; // init argv 
+            *blkdev,        // block device to mount DATADIR
+			*init_argv[] = { "/init", NULL}; // init argv
+	time_t timeout;
 	const char *android_fstab;
-	int i; // general purpose integer
+	//int i; // general purpose integer
 	//pid_t udev_pid;			// the pid of android_udev process
 	mountpoint *list = NULL;
 
 	android_fstab = line = start = initrd_path = fstab_path = blkdev = NULL;
-	i=0;
-			
-	if((logfile = fopen(LOG,"w")) == NULL)
+	//i=0;
+	if(chdir(WORKING_DIR) || (logfile = fopen(LOG,"w")) == NULL)
 	{
-		fatal(argv,envp);
 		exit(EXIT_FAILURE);
 	}
 	// mount /proc
-	if(mount("proc", "/proc", "proc", MS_RELATIME, ""))
+	if(mount("proc", "proc", "proc", MS_RELATIME, ""))
 	{
 		EXIT_ERRNO("unable to mount /proc");
 	}
 	// alloc line
 	if((line = malloc(COMMAND_LINE_SIZE*sizeof(char))) == NULL)
 	{
-		umount("/proc");
+		umount("proc");
 		EXIT_ERRNO("malloc");
 	}
 	// read cmdline
 	if(read_cmdline(line))
 	{
-		umount("/proc");
+		umount("proc");
 		free(line);
 		EXIT_ERRNO("unable to read /proc/cmdline");
 	}
-	umount("/proc");
+	umount("proc");
 	if (!(start=strstr(line,CMDLINE_OPTION)))
 	{
 		free(line);
@@ -540,50 +426,56 @@ int main(int argc, char **argv, char **envp)
 	if(parser(start,&blkdev,&initrd_path,&fstab_path))
 	{
 		free(line);
-		EXIT_ERRNO("parsing failed");
+		EXIT_ERRNO("cmdline parsing failed");
 	}
 	free(line);
-	if(mount("sysfs","/sys","sysfs",MS_RELATIME,""))
-	{
-		EXIT_ERRNO("unable to mount /sys");
-	}
-	mdev(envp);
-	// make sure this was made
-	for(i=1;access(blkdev, R_OK) && i < TIMEOUT;i++)
-	{
-		sleep(1);
-		mdev(envp);
-	}
-	umount("/sys");
-	//mount blkdev on DATADIR
-	if(mount(blkdev,DATADIR,"ext4",0,""))
+	if(mount("sysfs","sys","sysfs",MS_RELATIME,""))
 	{
 		free(blkdev);
 		free(initrd_path);
 		free(fstab_path);
-		EXIT_ERRNO("unable to mount \"%s\" on %s",blkdev,DATADIR);
+		EXIT_ERRNO("unable to mount /sys");
+	}
+	mdev();
+	// make sure this was made
+	if(access(blkdev, R_OK))
+	{
+		timeout = time(NULL) + TIMEOUT;
+		do
+		{
+			usleep(100000); // 100 ms
+			mdev();
+		}
+		while(access(blkdev, R_OK) && time(NULL) < timeout);
+	}
+	//mount blkdev on DATADIR
+	if(mount(blkdev,DATADIR,"ext4",0,""))
+	{
+		EXIT_ERRNO("unable to mount \"/%s\" on %s",blkdev,DATADIR);
+		free(blkdev);
+		free(initrd_path);
+		free(fstab_path);
 	}
 	free(blkdev);
 #ifdef PERSISTENT_LOG
 	fclose(logfile);
 	logfile=fopen(PERSISTENT_LOG,"w");
 #endif
-	//extract android initrd over NEWROOT
-	if(try_initrd_mount(&initrd_path,NEWROOT))
+	// remove init symlink
+	if(unlink("/init"))
 	{
 		free(initrd_path);
 		free(fstab_path);
-		EXIT_ERRNO("try_initrd_mount \"%s\" on %s",initrd_path,NEWROOT);
-		
+		EXIT_ERRNO("cannot remove /init symlink");
+	}
+	//extract android initrd over /
+	if(try_initrd_mount(&initrd_path,"/"))
+	{
+		EXIT_ERRNO("try_initrd_mount \"%s\"",initrd_path);
+		free(initrd_path);
+		free(fstab_path);
 	}
 	free(initrd_path);
-	/*
-	//start android udev
-	if((udev_pid = start_android_udev()) < 0)
-	{
-		free(fstab_path);
-		EXIT_ERRNO("start_android_udev");
-	}*/
 	//parse fstab
 	if(fstab_parser(fstab_path,&list)) // only malloc troubles here ?
 	{
@@ -612,19 +504,11 @@ int main(int argc, char **argv, char **envp)
 	for(tmp=list;tmp;tmp=tmp->next)
 		fprintf(logfile,"%s,%s,%d\n",tmp->android_blkdev,tmp->fake_blkdev,tmp->fake_blkdev_fd);
 #endif	
-	/*if(wait_devices(udev_pid,list))
-		EXIT_ERRNO("wait_devices");
-	if(symlink_block_devices(list))
-		EXIT_ERRNO("symlink_block_devices");
-	if(substitute_android_udev())
-		EXIT_ERRNO("substitute_android_udev");*/
 	if(change_android_fstab(list,android_fstab))
 		EXIT_ERRNO("change_android_fstab");
-	if(chdir(NEWROOT) || chroot(NEWROOT))
-		EXIT_ERRNO("cannot chroot/chdir to \"%s\"",NEWROOT);
 	fclose(logfile);
 	free_list(list);
-	execve(init_argv[0],init_argv,envp);
-	fatal(argv,envp);
+	chdir("/");
+	execv(init_argv[0],init_argv);
 	exit(EXIT_FAILURE);
 }

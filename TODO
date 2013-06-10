@@ -4,3 +4,4 @@ all: Update documention to reflect the many recent changes.
 root_chooser: have to free() all from forked childs ( like shell and mdev ). i known that linux should free() on exit() but i'm paranoi, you known! :)
 root_chooser: add support for fat filesystems
 all: try to have a chrooted android system and use root_chooser for boot it. ( multiple android "roms" on the same device )
+all: reorganize common sources.

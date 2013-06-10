@@ -83,10 +83,9 @@ void fgets_fix(char *string)
 
 /* read the current cmdline from proc
  * return 0 on success, -1 on error
- * if an error occours 0 is returned.
  * WARN: dest MUST be at least COMMAND_LINE_SIZE long
  */
-int read_our_cmdline(char *dest)
+int read_cmdline(char *dest)
 {
 	int fd;
 
@@ -265,7 +264,7 @@ int main(int argc, char **argv, char **envp)
 		EXIT_ERROR("malloc");
 	}
 	// read cmdline
-	if(read_our_cmdline(line))
+	if(read_cmdline(line))
 	{
 		umount("/proc");
 		free(line);
