@@ -1,6 +1,41 @@
 /*
- * TODO:		read wanted boot option from /data, not from volume keys.
+ * root_chooser - v6 - choose the root directory.
+ * Copyright (C) massimo dragano <massimo.dragano@gmail.com>
+ *
+ * root_chooser is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * root_chooser is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ *
+ * root_choooser works as follow:
+ *
+ * 1) mount proc on /proc
+ * 2) read the contents of /proc/cmdline
+ * 3) search for "newroot="
+ * 4) parse as "block_device:root_directory:init_path,init_args"
+ * 5) mount block_device on /newroot
+ * 6) if /newroot/root_directory is a ext img mount it on /newroot
+ * 7) if /newroot/root_directory is an initramfs mount it on /newroot
+ * 8) chroot /newroot/root_directory
+ * 9) execve init_script
+ *
+ * ** NOTE **
+ * if something goes wrong or the first char
+ * of the readed line is '#', goto point 8
+ * with android initramfs into newroot and
+ * root_directory = "/", init_path = "/init".
  */
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,246 +48,333 @@
 #include <time.h>
 #include <sys/wait.h>
 
-#define LOG "/android/boot_chooser.log"
-#define INTERRUPTS "/proc/interrupts"
-#define CMDLINE "/proc/cmdline"
-#define ANDROID_ROOT "/android"
-#define LINUX_ROOT "/linux"
-#define BUSYBOX "/bin/busybox"
-#define MAX_LINE 255
-#define TIMEOUT 15 /* timeout in secs */
-#define DEBUG
+#include "utils.h"
+#include "root_chooser.h"
 
-#define LINUX_INIT_ARGS { "/sbin/init", NULL }
-#define ANDROID_INIT_ARGS { "/init",NULL }
-#define MDEV_ARGS { "/bin/mdev","-s",NULL }
-
-//provide linux root partition here, or will be read from kernel command line
-#define ROOT "/dev/mmcblk0p8"
+FILE * logfile;
 
 //fatal error occourred, boot up android
 void fatal(char **argv,char **envp)
 {
-#ifndef DEBUG
-	chdir(ANDROID_ROOT);
+	//TODO: maybe we must make some error checking also there...
+	//lock android boot if wanna only adb
+#ifndef ADB
+	chdir(NEWROOT);
 #endif
-	chroot(ANDROID_ROOT);
+	chroot(NEWROOT);
 	execve("/init",argv,envp);
 }
 
-void close_log(FILE *log)
+/* make /dev from /sys */
+void mdev(char **envp)
 {
-	int writed;
-	//store the amount of writed bytes
-	writed = ftell(log);
-	fclose(log);
-	//if we don't write anything remove the log file.
-	if(!writed)
-		unlink(LOG);
+	pid_t pid;
+	if(!(pid = fork()))
+	{
+		char *mdev_argv[] = MDEV_ARGS;
+		execve(BUSYBOX,mdev_argv,envp);
+	}
+	waitpid(pid,NULL,0);
+}
+
+/* substitute '\n' with '\0' */
+void fgets_fix(char *string)
+{
+	char *pos;
+	for(pos=string;*pos!='\n'&&*pos!='\0';pos++);
+	*pos='\0';
+}
+
+/* read the current cmdline from proc
+ * return 0 on success, -1 on error
+ * WARN: dest MUST be at least COMMAND_LINE_SIZE long
+ */
+int read_cmdline(char *dest)
+{
+	int fd;
+
+	memset(dest,'\0',COMMAND_LINE_SIZE);
+
+	if((fd = open("/proc/cmdline",O_RDONLY)) < 0)
+		return -1;
+	if((read(fd, dest, COMMAND_LINE_SIZE*(sizeof(char)))) < 0)
+	{
+		close(fd);
+		return -1;
+	}
+	close(fd);
+	// cmdline is stored with a final '\n', we don't like this
+	fgets_fix(dest);
+	return 0;
+}
+
+/* parse line as "blkdev:root_directory:init_path,init_arg1,init_arg2..."
+ * returned values are:
+ *	0 if ok
+ *	1 if a malloc error occourred or
+ *		if a parse error occourred.
+ * 	if an error occour errno it's set to the corresponding error number.
+ */
+int parser(char *line,char **blkdev, char **root, char ***init_args)
+{
+	register char *pos;
+	char *args_pool[INIT_MAX_ARGS+1];
+	register int i;
+	int j;
+
+	// init args_pool ( will free anything != 0 if an error occour )
+	memset(args_pool,'\0',(INIT_MAX_ARGS+1)*sizeof(char*));
+
+	// truncate on first space
+	for(pos=line;*pos!='\0'&&*pos!=' ';pos++);
+	*pos='\0';
+
+	// count args length
+	for(i=0,pos=line;*pos!=':'&&*pos!='\0';pos++)
+		i++;
+	// check for arg length
+	if(!i)
+	{
+		errno = EINVAL;
+		return 1;
+	}
+	// allocate memory dynamically ( i love this things <3 )
+	*blkdev = malloc((i+1)*sizeof(char));
+	if(!*blkdev)
+		return -1;
+	// copy string
+	strncpy(*blkdev,line,i);
+	*(*blkdev+i) = '\0';
+	// skip token
+	if(*pos==':')
+		pos++;
+	// skip trailing '/'
+	if(*pos=='/')
+		pos++;
+	for(i=0;*pos!=':'&&*pos!='\0';pos++)
+		i++;
+	if(!i && *(pos-1) != '/')
+	{
+		free(*blkdev);
+		errno = EINVAL;
+		return 1;
+	}
+	*root = malloc((i+NEWROOT_STRLEN+1)*sizeof(char));
+	if(!*root)
+	{
+		free(*blkdev);
+		return 1;
+	}
+	// copy NEWROOT to root
+	strncpy(*root,NEWROOT,NEWROOT_STRLEN);
+	// append user root_directory to NEWROOT
+	strncpy(*root+NEWROOT_STRLEN,pos - i,i);
+	*(*root + NEWROOT_STRLEN+i) = '\0';
+	if(*pos==':')
+		pos++;
+	// count how many args we need while store them
+	for(j=0;j<INIT_MAX_ARGS && *pos != '\0';)
+	{
+		while(*pos==',')
+			pos++;
+		for(i=0;*pos!='\0'&&*pos!=',';pos++)
+			i++;
+		if(i) // this will fail if line terminates with space.
+		{
+			args_pool[j] = malloc((i+1)*sizeof(char));
+			if(args_pool[j])
+			{
+				strncpy(args_pool[j],pos - i,i);
+				args_pool[j][i]='\0';
+				j++; // increase args counter only if we have created one.
+			}
+			else // it's useless going on....exit now!
+			{
+				//free() don't change errno if called with a valid pointer.
+				free(*blkdev);
+				free(*root);
+				// free any allocated arg
+				for(j=0;j<INIT_MAX_ARGS+1;j++)
+					if(args_pool[j])
+						free(args_pool[j]);
+				return 1;
+			}
+		}
+	}
+	if(!j)
+	{
+		free(*blkdev);
+		free(*root);
+		// free any allocated arg
+		for(j=0;j<INIT_MAX_ARGS+1;j++)
+			if(args_pool[j])
+				free(args_pool[j]);
+		errno=EINVAL;
+		return 1;
+	}
+
+	*init_args = malloc((j+1)*sizeof(char*));
+	if(!*init_args)
+	{
+		// yeah, i'm really paranoid about error checking ;)
+		free(*blkdev);
+		free(*root);
+		for(j=0;j<INIT_MAX_ARGS+1;j++)
+			if(args_pool[j])
+				free(args_pool[j]);
+		return 1;
+	}
+	// copy args from args_pool to init_args
+	for(i=0;i<j;i++)
+		*(*init_args+i) = args_pool[i];
+	*(*init_args+i) = NULL;
+	return 0; // all ok
 }
 
 int main(int argc, char **argv, char **envp)
 {
-	FILE *log;
-	char 	*line, // where we place the readed line
-				*root, // the partition for booting up linux
-				*lnx_argv[] = LINUX_INIT_ARGS, // args for the linux init
-				*and_argv[] = ANDROID_INIT_ARGS; // args for android init
-	int i, // used for loops
-			fd, // input file descriptor
-			readed, // number of readed bytes
-			volup_count, // the number of KEY_VOLUP interrupts
-			voldown_count; // the number of KEY_VOLUMEDOWN interrupts
-	time_t start_time;
-	pid_t pid;
+	char *line,          // where we place the readed line
+             *start,         // where our args start
+             *root,          // directory to chroot
+             *blkdev,        // block device to mount on newroot
+             **new_argv;     // init args
+	int i,mounted_twice; // general purpose integer
 
-	if((log = fopen(LOG,"w")) == NULL)
-		fatal(argv,envp);
+	line = blkdev = root = NULL;
+	new_argv = NULL;
+	i=mounted_twice=0;
 
-	//mount proc
-	if(mount("proc","/proc","proc",MS_RELATIME,""))
+#define EXIT_SILENT     fclose(logfile); \
+                        fatal(argv,envp); \
+                        exit(EXIT_FAILURE);
+#define EXIT_ERROR(err) fprintf(logfile, err " - %s\n", strerror(errno)); \
+                        EXIT_SILENT
+			
+	if((logfile = fopen(LOG,"w")) == NULL)
 	{
-		fprintf(log,"%s\n",strerror(errno));
-		fclose(log);
 		fatal(argv,envp);
+		exit(EXIT_FAILURE);
 	}
-	if((line = malloc(MAX_LINE)) == NULL)
+	// mount /proc
+	if(mount("proc", "/proc", "proc", MS_RELATIME, ""))
 	{
-		fprintf(log,"%s\n",strerror(errno));
-		fclose(log);
+		EXIT_ERROR("unable to mount /proc");
+	}
+	// alloc line
+	if((line = malloc(COMMAND_LINE_SIZE*sizeof(char))) == NULL)
+	{
 		umount("/proc");
-		fatal(argv,envp);
+		EXIT_ERROR("malloc");
 	}
-#ifndef ROOT
-	//read root from kernel cmdline
-	if((root = malloc(30)) == NULL)
+	// read cmdline
+	if(read_cmdline(line))
 	{
-		fprintf(log,"%s\n",strerror(errno));
-		fclose(log);
+		umount("/proc");
 		free(line);
-		umount("/proc");
-		fatal(argv,envp);
+		EXIT_ERROR("unable to read /proc/cmdline");
 	}
-	root[0] = '\0';
-	if((fd = open(CMDLINE,O_RDONLY)) >= 0)
+	umount("/proc");
+	if (!(start=strstr(line,CMDLINE_OPTION)))
 	{
-		do
+		fprintf(logfile,"unable to find \"%s\" in \"%s\"\n",CMDLINE_OPTION,line);
+		free(line);
+		EXIT_SILENT;
+	}
+	start+=CMDLINE_OPTION_LEN;
+	if(parser(start,&blkdev,&root,&new_argv))
+	{
+		free(line);
+		EXIT_ERROR("parsing failed");
+	}
+	free(line);
+	if(mount("sysfs","/sys","sysfs",MS_RELATIME,""))
+	{
+		EXIT_ERROR("unable to mount /sys");
+	}
+	mdev(envp);
+	// make sure this was made
+	for(i=1;access(blkdev, R_OK) && i < TIMEOUT;i++)
+	{
+		sleep(1);
+		mdev(envp);
+	}
+	umount("/sys");
+	//mount blkdev on NEWROOT
+	if(mount(blkdev,NEWROOT,"ext4",0,""))
+	{
+		fprintf(logfile,"unable to mount \"%s\" on %s - %s\n",blkdev,NEWROOT,strerror(errno));
+		free(blkdev);
+		free(root);
+		for(i=0;new_argv[i];i++)
+			free(new_argv[i]);
+		EXIT_SILENT;
+	}
+	free(blkdev);
+	//if root is an ext image mount it on NEWROOT
+	if(!initrd_mount(root,NEWROOT) || !loop_mount(root,NEWROOT))
+	{
+		mounted_twice=1;
+		// root is NEWROOT now
+		free(root);
+		root = malloc((NEWROOT_STRLEN+1)*sizeof(char));
+		if(!root)
 		{
-			for(i=0;i<MAX_LINE && ((readed = read(fd,&line[i],MAX_LINE)) == 1);i++)
-				if(line[i] == ' ') // we have an option
-				{
-					line[i] = '\0'; // terminate string
-					if(!strncmp(line,"root=",5))
-					{
-						strncpy(root,line+5,29);
-						root[29] = '\0';
-						break;
-					}
-				}
+			EXIT_ERROR("malloc");
 		}
-		while(readed > 0);
-		close(fd);
-		if(readed < 0) // ERROR
+		strncpy(root,NEWROOT,NEWROOT_STRLEN);
+		*(root+NEWROOT_STRLEN) = '\0';
+	}
+	//check for init existence
+	i=strlen(root) + strlen(new_argv[0]);
+	if((line=malloc((i+1)*sizeof(char))))
+	{
+		strncpy(line,root,i);
+		strncat(line,new_argv[0],i);
+		line[i]='\0';
+		if(!access(line,R_OK|X_OK))
 		{
-			fprintf(log,"reading \"%s\" - %s\n",CMDLINE,strerror(errno));
-			fclose(log);
+			if(!chdir(root) && !chroot(root))
+			{
+				free(root);
+				fclose(logfile);
+				execve(new_argv[0],new_argv,envp);
+			}
+			else
+			{
+				fprintf(logfile,"cannot chroot/chdir to \"%s\" - %s\n",root,strerror(errno));
+				free(root);
+				for(i=0;new_argv[i];i++)
+					free(new_argv[i]);
+				fclose(logfile);
+				umount(NEWROOT);
+				if(mounted_twice)
+					umount(NEWROOT);
+			}
+		}
+		else
+		{
+			fprintf(logfile,"cannot execute \"%s\" - %s\n",line,strerror(errno));
 			free(line);
 			free(root);
-			umount("/proc");
-			fatal(argv,envp);
+			for(i=0;new_argv[i];i++)
+				free(new_argv[i]);
+			fclose(logfile);
+			umount(NEWROOT);
+			if(mounted_twice)
+				umount(NEWROOT);
 		}
 	}
 	else
 	{
-		fprintf(log,"%s\n",strerror(errno));
-		fclose(log);
-		free(line);
+		fprintf(logfile,"malloc - %s\n",strerror(errno));
 		free(root);
-		umount("/proc");
-		fatal(argv,envp);
+		for(i=0;new_argv[i];i++)
+			free(new_argv[i]);
+		fclose(logfile);
+		umount(NEWROOT);
+		if(mounted_twice)
+			umount(NEWROOT);
 	}
-	if(root[0] == '\0')
-	{
-		fwrite("no \"root=/dev/XXX\" from CMDLINE\n",32,1,log);
-		fclose(log);
-		free(line);
-		free(root);
-		umount("/proc");
-		fatal(argv,envp);
-	}
-#else
-	root = ROOT;
-#endif
-	voldown_count = volup_count = 0;
-	time(&start_time);
-	if((fd = open(INTERRUPTS,O_RDONLY)) >= 0)
-	{
-		while(voldown_count == 0 && volup_count == 0 && (time(NULL) - start_time) < TIMEOUT)
-		{
-			for(i = 0;i < MAX_LINE && ((readed = read(fd,&line[i],1)) == 1);i++)
-			{
-				if(line[i] == '\n') // we have a line
-				{
-					if(strstr(line,"KEY_VOLUMEUP"))
-						sscanf(line,"%*s%d",&volup_count);
-					else if(strstr(line,"KEY_VOLUMEDOWN"))
-						sscanf(line,"%*s%d",&voldown_count);
-					i=-1; // read next line
-				}
-			}
-			if(readed < 0) // ERROR
-			{
-				fprintf(log,"reading \"%s\" - %s\n",INTERRUPTS,strerror(errno));
-				fclose(log);
-				free(line);
-#ifndef ROOT
-				free(root);
-#endif
-				close(fd);
-				umount("/proc");
-				fatal(argv,envp);
-			}
-			lseek(fd,0L,SEEK_SET);
-		}
-		close(fd);
-	}
-	else
-	{
-		fprintf(log,"opening \"%s\" - %s\n",INTERRUPTS,strerror(errno));
-		fclose(log);
-		umount("/proc");
-		free(line);
-#ifndef ROOT
-		free(root);
-#endif
-		fatal(argv,envp);
-	}
-
-	free(line);
-	if(voldown_count == 0 && volup_count == 0) // something bad
-	{
-		fwrite("VOLUP/VOLDOWN not pressed\n",26,1,log);
-		umount("/proc");
-		fclose(log);
-#ifndef ROOT
-		free(root);
-#endif
-		fatal(argv,envp);
-	}
-	if(voldown_count)
-	{
-#ifndef ROOT
-		free(root);
-#endif
-		close_log(log);
-		umount("/proc");
-#ifndef DEBUG
-		chdir(ANDROID_ROOT);
-#endif
-		chroot(ANDROID_ROOT);
-		execve(and_argv[0],and_argv,envp);
-	}
-	else if(volup_count)
-	{
-		if(mount("sysfs","/sys","sysfs",MS_RELATIME,""))
-		{
-			fwrite("unable to mount /sys\n",21,1,log);
-			fclose(log);
-			umount("/proc");
-			fatal(argv,envp);
-		}
-		//start mdev
-		if(!(pid = fork()))
-		{
-			char *mdev_argv[] = MDEV_ARGS;
-			execve("/bin/busybox",mdev_argv,envp);
-			return EXIT_FAILURE;
-		}
-		waitpid(pid,&i,0);
-		umount("/sys");
-		//mount root partition into LINUX_ROOT
-		if(mount(root,LINUX_ROOT,"ext4",0,""))
-		{
-			fprintf(log,"unable to mount %s on %s\n",root,LINUX_ROOT);
-			fclose(log);
-#ifndef ROOT
-			free(root);
-#endif
-			umount("/proc");
-			fatal(argv,envp);
-		}
-#ifndef ROOT
-		free(root);
-#endif
-#ifdef DEBUG
-		if(!fork())
-			fatal(argv,envp);
-#endif
-		close_log(log);
-		chdir(LINUX_ROOT);
-		chroot(LINUX_ROOT);
-		execve(lnx_argv[0],lnx_argv,envp);
-	}
-
-	return EXIT_FAILURE; // just for make gcc don't fire up warnings
+	fatal(argv,envp);
+	exit(EXIT_FAILURE);
 }

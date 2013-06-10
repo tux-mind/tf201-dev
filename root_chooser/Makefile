@@ -4,8 +4,8 @@ INITRD=initrd
 
 CC?=arm-unknown-linux-gnueabi-gcc
 LD?=arm-unknown-linux-gnueabi-ld
-CFLAGS=-Wall -Werror -g -static
-LDFLAGS=-lz -llzma -lmenu -lcurses
+CFLAGS=-Wall -Werror -g -static -I../utils
+LDFLAGS=-lz -llzma
 
 ifdef INCLUDE_DIR
 	CFLAGS:=$(CFLAGS) -I$(INCLUDE_DIR)
@@ -15,22 +15,10 @@ ifdef LIB_DIR
 	LDFLAGS:=-L$(LIB_DIR) $(LDFLAGS)
 endif
 
-all: v6 initrd
+all: root_chooser initrd
 
-v6: root_chooser6.c loop_mount2.o initrd_mount.o  zlib.o
+root_chooser: root_chooser.c ../utils/initrd_mount.o ../utils/loop_mount.o ../utils/zlib.o
 	$(CC) $(CFLAGS) -o $(TARGET_BIN) $? $(LDFLAGS)
-
-v4: root_chooser4.c loop_mount2.o
-	$(CC) $(CFLAGS) -o $(TARGET_BIN) $?
-
-v3: root_chooser3.c loop_mount.o
-	$(CC) $(CFLAGS) -o $(TARGET_BIN) $?
-
-v2: root_chooser2.c
-	$(CC) $(CFLAGS) -o $(TARGET_BIN) $<
-
-v1: root_chooser.c
-	$(CC) $(CFLAGS) -o $(TARGET_BIN) $<
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<

@@ -35,7 +35,7 @@
 #include <sys/mount.h>
 #include <sys/time.h>
 
-#include "loop_mount3.h"
+#include "loop_mount.h"
 
 #define MS_LOOP 0x00010000
 
@@ -53,13 +53,13 @@ int set_loop(const char *device, char *file,int *fd_to_close)
 
 	if ((ffd = open(file, O_RDWR)) < 0)
 	{
-		ERROR("cannot open \"%s\" - %s\n",file,strerror(errno));
+		LOG("cannot open \"%s\" - %s\n",file,strerror(errno));
 		return 1;
 	}
 	else if ((fd = open(device, O_RDWR)) < 0)
 	{
 		close(ffd);
-		ERROR("cannot open \"%s\" - %s\n",device,strerror(errno));
+		LOG("cannot open \"%s\" - %s\n",device,strerror(errno));
 		return 1;
 	}
 	memset(&loopinfo64, 0, sizeof(loopinfo64));
@@ -74,7 +74,7 @@ int set_loop(const char *device, char *file,int *fd_to_close)
 			return 2;
 		else
 		{
-			ERROR("cannot associate \"%s\" with \"%s\" - %s\n",file,device,strerror(errno));
+			LOG("cannot associate \"%s\" with \"%s\" - %s\n",file,device,strerror(errno));
 			return 1;
 		}
 	}
@@ -82,7 +82,7 @@ int set_loop(const char *device, char *file,int *fd_to_close)
 
 	if (ioctl(fd, LOOP_SET_STATUS64, &loopinfo64))
 	{
-		ERROR("ioctl: LOOP_SET_STATUS64 - %s\n",strerror(errno));
+		LOG("ioctl: LOOP_SET_STATUS64 - %s\n",strerror(errno));
 		ioctl (fd, LOOP_CLR_FD, 0);
 		close (fd);
 		return 1;
@@ -96,7 +96,7 @@ int set_loop(const char *device, char *file,int *fd_to_close)
  * @mountpoint:		the directory were to mount the image file.
  */
 
-int try_loop_mount(char **loopfile, const char *mountpoint)
+int loop_mount(char *loopfile, const char *mountpoint)
 {
 	int res,retries,fd_to_close;
 	struct stat st;
@@ -115,38 +115,26 @@ int try_loop_mount(char **loopfile, const char *mountpoint)
 	 * after the related mount(2) call.
 	 */
 
-	if(stat(*loopfile, &st))
+	if(stat(loopfile, &st))
 	{
-		ERROR("cannot stat \"%s\" - %s\n",*loopfile,strerror(errno));
+		LOG("cannot stat \"%s\" - %s\n",loopfile,strerror(errno));
 		return 1;
 	}
 
-	if (S_ISREG(st.st_mode))
-  {
-		fd_to_close=0;
-		for(retries = 0; (res = set_loop(LOOP_DEVICE,*loopfile,&fd_to_close)) == 2 && retries < 3; retries++)
-			sleep(1);
-		if(res)
-			return 1;
-		umount(mountpoint);
-		if(mount(LOOP_DEVICE,mountpoint,"ext4",MS_LOOP,""))
-		{
-			ERROR("cannot mount \"%s\" on \"%s\" - %s\n",LOOP_DEVICE,mountpoint,strerror(errno));
-			close(fd_to_close);
-			return 1;
-		}
+	if (!S_ISREG(st.st_mode))
+		return 1;
+	fd_to_close=0;
+	for(retries = 0; (res = set_loop(LOOP_DEVICE,loopfile,&fd_to_close)) == 2 && retries < 3; retries++)
+		sleep(1);
+	if(res)
+		return 1;
+	umount(mountpoint);
+	if(mount(LOOP_DEVICE,mountpoint,"ext4",MS_LOOP,""))
+	{
+		LOG("cannot mount \"%s\" on \"%s\" - %s\n",LOOP_DEVICE,mountpoint,strerror(errno));
 		close(fd_to_close);
-		free(*loopfile);
-		res = strlen(mountpoint);
-		*loopfile = malloc((res+1)*sizeof(char));
-		if(!*loopfile)
-		{
-			FATAL("malloc - %s\n",strerror(errno));
-			return 1;
-		}
-		strncpy(*loopfile,mountpoint,res);
-		*(*loopfile+res)='\0';
-  }
-
-  return 0;
+		return 1;
+	}
+	close(fd_to_close);
+	return 0;
 }
