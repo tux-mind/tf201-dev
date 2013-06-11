@@ -1,6 +1,7 @@
 TARGET_BIN=android_chooser
 INITRD_DIR=initramfs
 INITRD=initrd
+WORKING_DIR=.android_chooser
 
 CC?=arm-unknown-linux-gnueabi-gcc
 LD?=arm-unknown-linux-gnueabi-ld
@@ -24,7 +25,8 @@ android_chooser: android_chooser.c ../utils/loop_mount.o mountpoints.o ../utils/
 	$(CC) $(CFLAGS) -c -o $@ $<
 	
 initrd:
-	cp $(TARGET_BIN) $(INITRD_DIR)/init
+	cp $(TARGET_BIN) $(INITRD_DIR)/$(WORKING_DIR)/init
+	ln -fs "$(WORKING_DIR)/init" $(INITRD_DIR)/init
 	cd $(INITRD_DIR); find . | cpio --create --format='newc' > ../$(INITRD); gzip -f ../$(INITRD)
 
 clean:
