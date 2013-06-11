@@ -1,12 +1,12 @@
 Please visit http://wiki.gentoo.org/wiki/Asus_Transformer_Prime for more information.
 
-o v[0-9]/ contains stable versions of boot images and kernels.
-
-o test/ contains in development stuff.
-
 o scripts/ scripts to generate images and tweak keyboard layout.
 
-o root_chooser/ tmux_mind's root_chooser program.
+o root_chooser/ the program that change root on boot
+
+o android_chooser/ the program that change the android fstab on boot
+
+o kernel_chooser/ the fake initrd that works as a boot loader.
 
 o touchpad_control/ small program tp activate/deactivate the touchpad.
 
