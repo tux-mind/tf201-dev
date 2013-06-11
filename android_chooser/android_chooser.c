@@ -477,6 +477,12 @@ int main(int argc, char **argv)
 		free(fstab_path);
 	}
 	free(initrd_path);
+	// remove /bin symlink
+	if(unlink("/bin"))
+	{
+		free(fstab_path);
+		EXIT_ERRNO("cannot remove /bin symlink");
+	}
 	//parse fstab
 	if(fstab_parser(fstab_path,&list)) // only malloc troubles here ?
 	{

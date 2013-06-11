@@ -27,6 +27,7 @@ android_chooser: android_chooser.c ../utils/loop_mount.o mountpoints.o ../utils/
 initrd:
 	cp $(TARGET_BIN) $(INITRD_DIR)/$(WORKING_DIR)/init
 	ln -fs "$(WORKING_DIR)/init" $(INITRD_DIR)/init
+	ln -fs "$(WORKING_DIR)/bin" $(INITRD_DIR)/bin
 	cd $(INITRD_DIR); find . | cpio --create --format='newc' > ../$(INITRD); gzip -f ../$(INITRD)
 
 clean:
