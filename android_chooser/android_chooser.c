@@ -38,6 +38,7 @@
 
 FILE * logfile;
 
+#include "utils.h"
 #include "mountpoints.h"
 #include "android_chooser.h"
 
@@ -469,9 +470,9 @@ int main(int argc, char **argv)
 		EXIT_ERRNO("cannot remove /init symlink");
 	}
 	//extract android initrd over /
-	if(try_initrd_mount(&initrd_path,"/"))
+	if(initrd_extract(initrd_path,"/"))
 	{
-		EXIT_ERRNO("try_initrd_mount \"%s\"",initrd_path);
+		EXIT_ERRNO("initrd_extract \"%s\"",initrd_path);
 		free(initrd_path);
 		free(fstab_path);
 	}

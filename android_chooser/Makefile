@@ -4,7 +4,7 @@ INITRD=initrd
 
 CC?=arm-unknown-linux-gnueabi-gcc
 LD?=arm-unknown-linux-gnueabi-ld
-CFLAGS=-Wall -Werror -g -static
+CFLAGS=-Wall -Werror -g -static -I../utils
 LDFLAGS=-lz
 
 ifdef INCLUDE_DIR
@@ -15,17 +15,13 @@ ifdef LIB_DIR
 	LDFLAGS:=-L$(LIB_DIR) $(LDFLAGS)
 endif
 
-all: v1 fake_ueventd initrd
+all: android_chooser initrd
 
-v1: android_chooser.c loop_mount3.o mountpoints.o initrd_mount.o zlib.o
+android_chooser: android_chooser.c ../utils/loop_mount.o mountpoints.o ../utils/initrd_mount.o ../utils/zlib.o
 	$(CC) $(CFLAGS) $? $(LDFLAGS) -o $(TARGET_BIN)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
-
-fake_ueventd: fake_ueventd.c
-	$(CC) $(CFLAGS) -O2 -o $@ $<
-	cp $@ "$(INITRD_DIR)/bin/sleep"
 	
 initrd:
 	cp $(TARGET_BIN) $(INITRD_DIR)/init

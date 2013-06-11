@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 #include <stdint.h>
 
-#include "common3.h"
+#include "common.h"
 #include "fbGUI.h"
 
 long int screensize; // number of bytes in the screen pointer

@@ -43,9 +43,10 @@
 #include <sys/reboot.h>
 #include <termios.h>
 #include <ctype.h>
+#include <unistd.h>
 
 #include "common.h"
-#include "menu2.h"
+#include "menu.h"
 #include "kernel_chooser.h"
 
 // if == 1 => someone called FATAL we have to exit
@@ -262,9 +263,8 @@ int config_parser(char *line,char **blkdev, char**kernel, char **initrd)
  * @file: the parsed file
  * @fallback_name: name to use if no one has been found
  * @list: the entries list
- * @def_entry: optional pointer to the menu_entry struct
  */
-int parser(char *file, char *fallback_name, menu_entry **list, menu_entry **def_entry)
+int parser(char *file, char *fallback_name, menu_entry **list)
 {
 	FILE *fin;
 	char name_line[MAX_NAME],line[MAX_LINE],*blkdev,*kernel,*initrd,*cmdline,*name;
@@ -274,8 +274,7 @@ int parser(char *file, char *fallback_name, menu_entry **list, menu_entry **def_
 
 	if(!(fin=fopen(file,"r")))
 	{
-		// if we are reading the default entry this isn't an error
-		if(!def_entry)
+		if(strncmp(fallback_name,DEFAULT_CONFIG_NAME,strlen(DEFAULT_CONFIG_NAME)))
 			ERROR("cannot open \"%s\" - %s\n", file,strerror(errno));
 		//nothing to free, exit now
 		return -1;
@@ -283,19 +282,28 @@ int parser(char *file, char *fallback_name, menu_entry **list, menu_entry **def_
 
 	if(!fgets(name_line,MAX_NAME,fin) || !fgets(line,MAX_LINE,fin)) // read the second line
 	{
-		fclose(fin);
 		// error
 		if(!feof(fin))
 		{
 			ERROR("cannot read \"%s\" - %s\n",file,strerror(errno));
+			fclose(fin);
 			return -1;
 		}
+		fclose(fin);
 		WARN("file \"%s\" must have at least 2 lines\n",file);
 		return -1;
 	}
 	fgets_fix(name_line);
 	fgets_fix(line);
-	name_len = strlen(name_line);
+	//check that name/description is printable ( ncurses menu will fail otherwise )
+	// http://en.wikipedia.org/wiki/ASCII#ASCII_printable_characters
+	//HACK: use name_len as counter, just to do 2 things in one loop ;)
+	for(name_len=0;name_line[name_len]!='\0';name_len++)
+	  if(name_line[name_len] <  0x20 || name_line[name_len] > 0x7E)
+	  {
+	    WARN("file \"%s\" have unprintable characters in name/description\n",file);
+	    return -1;
+	  }
 	if(!name_len) // no name
 	{
 		WARN("file \"%s\" don't have a DESCRIPTION/NAME\n",file);
@@ -312,35 +320,16 @@ int parser(char *file, char *fallback_name, menu_entry **list, menu_entry **def_
 	strncpy(name,name_line,name_len);
 	*(name+name_len)='\0';
 	if (
-		config_parser(line,&blkdev,&kernel,&initrd) ||
-		cmdline_parser(fgets_fix(fgets(line,MAX_LINE,fin)),&cmdline)
+		!config_parser(line,&blkdev,&kernel,&initrd) &&
+		!cmdline_parser(fgets_fix(fgets(line,MAX_LINE,fin)),&cmdline)
 	)
-		goto error_with_fclose;
-	fclose(fin);
-	if(!def_entry)
 	{
+		fclose(fin);
 		*list = add_entry(*list, name, blkdev, kernel, cmdline, initrd);
 		return 0;
 	}
-	// we are building the default entry, which isn't in the list
-	*def_entry = malloc(sizeof(menu_entry));
-	if(!(*def_entry))
-	{
-		FATAL("malloc - %s\n",strerror(errno));
-		goto error;
-	}
-	(*def_entry)->name 		= name;
-	(*def_entry)->kernel 	= kernel;
-	(*def_entry)->initrd 	= initrd;
-	(*def_entry)->blkdev 	= blkdev;
-	(*def_entry)->cmdline	= cmdline;
-	(*def_entry)->next = NULL;
-	have_default=1;
-	return 0;
 
-error_with_fclose:
 	fclose(fin);
-error:
 	if(blkdev)
 		free(blkdev);
 	if(kernel)
@@ -380,12 +369,12 @@ int open_console(void)
 	if(access(CONSOLE,R_OK|W_OK))
 	{ // no console yet... wait until timeout
 		sleep(1);
-		for(i=1;access(CONSOLE,R_OK|W_OK) && i < TIMEOUT;i++)
+		for(i=1;access(CONSOLE,R_OK|W_OK) && i < TIMEOUT_BLKDEV;i++)
 		{
 			sleep(1);
 			mdev();
 		}
-		if(i==TIMEOUT) // no console availbale ( user it's using an older kernel )
+		if(i==TIMEOUT_BLKDEV) // no console availbale ( user it's using an older kernel )
 		{
 			errno = ETIMEDOUT;
 			return -1;
@@ -393,112 +382,6 @@ int open_console(void)
 	}
 	take_console_control();
 	return 0;
-}
-
-char getch()
-{
-	char buf = 0;
-	struct termios old,new;
-
-	if(tcgetattr(STDIN_FILENO, &old)<0)
-		return -1;
-	new = old;
-	new.c_lflag &= ~(ICANON | ECHO);
-	new.c_cc[VMIN] = 1;
-	new.c_cc[VTIME] = 0;
-	if (tcsetattr(STDIN_FILENO, TCSANOW, &new) < 0)
-					return -1;
-	if (read(STDIN_FILENO, &buf, 1) < 0)
-					return -1;
-	if (tcsetattr(0, TCSADRAIN, &old) < 0)
-					return -1;
-	return buf;
-}
-
-void press_enter(void)
-{
-	char garbage[MAX_LINE];
-	INFO("press <ENTER> to continue..."); // the last "\n" is added by the user
-	fgets(garbage,MAX_LINE,stdin);
-}
-
-int wait_for_keypress(void)
-{
-	int stat,timeout;
-	pid_t pid,wpid;
-
-	timeout = TIMEOUT_BOOT;
-
-	if((pid = fork()))
-	{
-    do
-		{
-			wpid = waitpid(pid, &stat, WNOHANG);
-			if(!wpid)
-			{
-					printf("\r\033[1KAutomatic boot in %2u seconds...", timeout); // rewrite the line every second
-					fflush(stdout);
-					timeout--;
-					sleep(1);
-			}
-    } while (wpid == 0 && timeout);
-		if(wpid== 0 || !timeout || !WIFEXITED(stat))
-		{
-			if(!wpid)
-				kill(pid, SIGKILL);
-			stat = MENU_DEFAULT_NUM; // no keypress
-		}
-		else
-			stat = WEXITSTATUS(stat);
-		printf("\r\033[2K");
-		return stat;
-	}
-	else if(pid < 0)
-	{
-		FATAL("cannot fork - %s\n",strerror(errno));
-		return 0;
-	}
-	else
-	{
-		exit( getch() );
-		return 0; /* not reached */
-	}
-}
-
-int get_user_choice(void)
-{
-	int i;
-	char buff[MAX_LINE];
-
-	printf("enter a number and press <ENTER>: ");
-
-	fgets(buff,MAX_LINE,stdin);
-	fgets_fix(buff);
-	for(i=0;i<MAX_LINE && buff[i] != '\0' && isspace(buff[i]);i++);
-	switch(buff[i])
-	{
-		case MENU_DEFAULT:
-			i = MENU_DEFAULT_NUM;
-			break;
-		case MENU_REBOOT:
-			i = MENU_REBOOT_NUM;
-			break;
-		case MENU_HALT:
-			i=MENU_HALT_NUM;
-			break;
-		case MENU_RECOVERY:
-			i=MENU_RECOVERY_NUM;
-			break;
-#ifdef SHELL
-		case MENU_SHELL:
-			i=MENU_SHELL_NUM;
-			break;
-#endif
-		default:
-			i = atoi(buff);
-	}
-	printed_lines++; // user press enter
-	return i;
 }
 
 int parse_data_directory(menu_entry **list)
@@ -520,8 +403,7 @@ int parse_data_directory(menu_entry **list)
 	while((d = readdir(dir)) != NULL)
 		if(d->d_type != DT_DIR)
 		{
-			DEBUG("parsing %s\n",d->d_name);
-			if(parser(d->d_name,d->d_name,list,NULL))
+			if(parser(d->d_name,d->d_name,list))
 			{
 				if(fatal_error)
 				{
@@ -529,7 +411,6 @@ int parse_data_directory(menu_entry **list)
 					chdir("/");
 					return -1;
 				}
-				press_enter();
 				continue;
 			}
 		}
@@ -547,24 +428,35 @@ int wait_for_device(char *blkdev)
 		INFO("waiting for device...\n");
 		sleep(1);
 		mdev();
-		for(i=1;access(blkdev,R_OK) && i < TIMEOUT;i++)
+		for(i=1;access(blkdev,R_OK) && i < TIMEOUT_BLKDEV;i++)
 		{
 			sleep(1);
 			mdev();
 		}
 		umount("/sys");
-		if(i==TIMEOUT)
+		if(i==TIMEOUT_BLKDEV)
 			return -1;
 	}
 	return 0;
 }
 
+void cleanup(int data_dir_to_parse, menu_entry *list)
+{
+	if(data_dir_to_parse)
+		umount("/data");
+	else
+		nc_destroy_menu();
+	if (list)
+		free_list(list);
+	nc_destroy();
+}
+
 void init_reboot(int magic)
 {
 	// this could use a lot more cleanup (unmount, etc)
+	cleanup(0,NULL);
 	reboot(magic); // codes are: RB_AUTOBOOT, RB_HALT_SYSTEM, RB_POWER_OFF, etc
 	FATAL("cannot reboot/shutdown\n");
-	exit(-1);
 }
 
 void reboot_recovery(void)
@@ -580,6 +472,7 @@ void reboot_recovery(void)
 #ifdef SHELL
 void shell(void)
 {
+	fflush(stdout);
 	char *sh_argv[] = SHELL_ARGS;
 	pid_t pid;
 	if (!(pid = fork())) {
@@ -591,15 +484,33 @@ void shell(void)
 }
 #endif
 
+void screenshot()
+{
+	nc_save();
+	pid_t pid;
+	if (!(pid = fork())) {
+		take_console_control();
+		execl("/bin/busybox","cp", "-p", "/dev/fb0", "/data/fb0.dump", NULL);
+	}
+	waitpid(pid,NULL,0);
+	take_console_control();
+	nc_load();
+}
+
 int main(int argc, char **argv, char **envp)
 {
-	int i;
-	menu_entry *list=NULL,*item,*def_entry=NULL;
+	int i,data_dir_to_parse;
+	menu_entry *list=NULL,*item;
 
 	// errors before open_console are fatal
-	fatal_error = 1;
+	fatal_error = data_dir_to_parse = 1;
 
-	// mount sys
+	/* mount sys
+	 * if the initrd does not contain /sys, make it for them
+	 * we want to try as hard as we can to open the console
+	 * without the console we can not communicate to the user
+	 */
+	mkdir("/sys", 0700);
 	if(mount("sysfs","/sys","sysfs",MS_RELATIME,""))
 		goto error;
 	// open the console
@@ -609,79 +520,114 @@ int main(int argc, char **argv, char **envp)
 		goto error;
 	}
 	umount("/sys");
+	if(nc_init())
+		goto error;
 
-	// init printed_lines counter, fatal error flag and default entry flag
-	fatal_error=printed_lines=have_default=0;
-	printf(HEADER);
+	fb_init();
+
+	nc_status("mounting /proc");
 	// mount proc ( required by kexec )
 	if(mount("proc","/proc","proc",MS_RELATIME,""))
 	{
 		FATAL("cannot mount proc\n");
 		goto error;
 	}
-	INFO("mounting /data\n");
+	nc_status("mounting /data");
 	// mount DATA_DEV partition into /data
 	if(mount(DATA_DEV,"/data","ext4",0,""))
 	{
 		FATAL("mounting %s on \"/data\" - %s\n",DATA_DEV,strerror(errno));
 		goto error;
 	}
+
+	fatal_error=0;
+
+	fb_background();
+	if(fatal_error)
+	{
+		FATAL("fatal error occourred in fb_background() - %s\n",strerror(errno));
+		goto error;
+	}
+
 	// check for a default entry
-	if(parser(DEFAULT_CONFIG,"default",NULL,&def_entry) && fatal_error)
+	if(parser(DEFAULT_CONFIG,DEFAULT_CONFIG_NAME,&list) && fatal_error)
 	{
 		umount("/data");
 		goto error;
 	}
-	if(!have_default)
+
+	if(list)
+	{
+		INFO("found a default config\n");
+		if(nc_wait_for_keypress())
+		{
+			i=MENU_DEFAULT;
+			goto skip_menu;
+		}
+	}
+	else
 		INFO("no default config found\n");
-	if(parse_data_directory(&list))
-	{
-		umount("/data");
-		goto error;
-	}
-	umount("/data");
-	// we have printed something, give user time to read
-	// ( >1 because INFO(mounting data) is not useful )
-	if(printed_lines>1)
-		press_enter();
-	clear_screen();
-	// automatically boot in TIMEOUT_BOOT seconds
-	if (have_default && ((i=wait_for_keypress()) == MENU_DEFAULT_NUM))
-		goto skip_menu; // automatic boot ( no input required )
 
-	// now we have all data. ( NOTE: 'i' contains the pressed key if needed )
-
-	/* we restart from here in case of not fatal errors */
 menu_prompt:
-	print_menu(list);
-	i=get_user_choice();
+	if(data_dir_to_parse)
+	{
+		INFO("parsing data directory\n");
+		data_dir_to_parse=0;
+		if(parse_data_directory(&list))
+		{
+			umount("/data");
+			goto error;
+		}
+		umount("/data");
+		if(nc_compute_menu(list))
+			goto error;
+	}
+	i=nc_get_user_choice();
+	//take_console_control();
 skip_menu:
 	DEBUG("user chose %d\n",i);
 	// decide what to do
 	switch (i)
 	{
-		case MENU_DEFAULT_NUM:
-			if(!have_default)
+		case MENU_FATAL_ERROR:
+			FATAL("ncurses - %s\n",strerror(errno));
+			goto error;
+			break;
+		case MENU_DEFAULT:
+			if(!list)
 			{
 				WARN("invalid choice\n");
-				goto error;
+				goto error; // user can choose one of the default entries ( like recovery )
 			}
-			item=def_entry;
+			item=list;
 			break;
-		case MENU_REBOOT_NUM:
+		case MENU_REBOOT:
 			init_reboot(RB_AUTOBOOT);
 			goto error;
-		case MENU_HALT_NUM:
-			init_reboot(RB_HALT_SYSTEM);
+		case MENU_HALT:
+			init_reboot(RB_POWER_OFF);
 			goto error;
-		case MENU_RECOVERY_NUM:
+		case MENU_RECOVERY:
 			reboot_recovery();
 			goto error;
 #ifdef SHELL
-		case MENU_SHELL_NUM:
+		case MENU_SHELL:
+			nc_save();
+			printf("\033[2J\033[H"); // clear the screen
 			shell();
+			nc_load();
 			goto menu_prompt;
 #endif
+		case MENU_SCREENSHOT:
+			if(mount(DATA_DEV,"/data","ext4",0,""))
+			{
+				ERROR("mounting %s on \"/data\" - %s\n",DATA_DEV,strerror(errno));
+				goto error;
+			}
+			screenshot();
+			DEBUG("Framebuffer saved to /data/fb0.dump\n");
+			umount("/data");
+			goto menu_prompt;
 		default: // parsed config
 			item=get_item_by_id(list,i);
 	}
@@ -708,6 +654,8 @@ skip_menu:
 		goto error;
 	}
 	umount(NEWROOT);
+	if(data_dir_to_parse)
+		umount("/data");
 	DEBUG("kernel = \"%s\"\n",item->kernel);
 	DEBUG("initrd = \"%s\"\n",item->initrd);
 	DEBUG("cmdline = \"%s\"\n",item->cmdline);
@@ -715,12 +663,8 @@ skip_menu:
 	// we made it, time to clean up and kexec
 	INFO("booting \"%s\"\n",item->name);
 
-	#ifdef DEVELOPMENT
-	press_enter();
-	#endif
-	free_menu(list);
-	if(have_default)
-		free_entry(def_entry);
+	umount("/proc");
+	cleanup(data_dir_to_parse, list);
 	if(!fork())
 	{
 		k_exec(); // bye bye
@@ -728,19 +672,22 @@ skip_menu:
 	}
 	wait(NULL); // should not return on success
 	take_console_control();
-	FATAL("failed to kexec\n"); // we cannot go back, already freed everything...
-	FATAL("this is horrible!\n");
-	FATAL("please provide a full bug report to developers\n");
-	press_enter();
+	//make sure that user read this
+	nc_error("kexec call failed!");
 	exit(EXIT_FAILURE); // kernel panic here
 
 error:
-	press_enter();
 	if(!fatal_error)
 		goto menu_prompt;
-	free_menu(list);
-	if(have_default)
-		free_entry(def_entry);
-	umount("/proc");
+	cleanup(data_dir_to_parse, list);
+
+/* // uncomment this if you want, it may be useful, but it can also be annoying.
+#ifdef SHELL
+	printf("\033[2J\033[HAn error occurred during development. Dropping to an emergency shell.\n\n");
+	shell();
+#endif*/
+
+	printf("Kernel panic in 10 seconds...");
+	fflush(stdout);
 	exit(EXIT_FAILURE);
 }

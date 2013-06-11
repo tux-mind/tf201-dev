@@ -3,11 +3,11 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <string.h>
+#include <curses.h>
+#include <menu.h>
 
-#include "menu2.h"
+#include "menu.h"
 #include "common.h"
-
-int printed_lines,have_default;
 
 void free_entry(menu_entry *item)
 {
@@ -24,7 +24,7 @@ void free_entry(menu_entry *item)
 	free(item);
 }
 
-void free_menu(menu_entry *list)
+void free_list(menu_entry *list)
 {
 	menu_entry *current;
 	for(current=list;current;current=current->next)
@@ -86,40 +86,6 @@ menu_entry *del_entry(menu_entry *list, menu_entry *item)
 	}
 	free_entry(current);
 	return list;
-}
-
-void print_menu(menu_entry *list)
-{
-	menu_entry *current;
-	// clear screen
-	for(;printed_lines;printed_lines--)
-		printf("\033[A\033[2K"); // go UP and CLEAR line ( see VT100 reference )
-	rewind(stdout);
-	ftruncate(1,0);
-	// print entries
-	if(have_default)
-	{
-		printf("%c) boot the default config\n",MENU_DEFAULT);
-		printed_lines++;
-	}
-	printf("%c) reboot\n",MENU_REBOOT);
-	printf("%c) poweroff\n",MENU_HALT);
-	printf("%c) reboot recovery\n",MENU_RECOVERY);
-#ifdef SHELL
-	printf("%c) emergency shell\n",MENU_SHELL);
-	printed_lines++;
-#endif
-	printf("   ------------------\n");
-	for(printed_lines+=4,current=list;current;current=current->next,printed_lines++)
-		printf("%u) %s\n",current->id,current->name);
-}
-
-void clear_screen(void)
-{
-	for(;printed_lines;printed_lines--)
-		printf("\033[A\033[2K"); // see print_menu for info
-	rewind(stdout);
-	ftruncate(1,0);
 }
 
 menu_entry *get_item_by_id(menu_entry *list, int id)

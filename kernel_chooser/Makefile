@@ -4,10 +4,11 @@ DEVELOPMENT?=0
 TARGET_BIN=kernel_chooser
 INITRD_DIR=initramfs
 INITRD=initrd
+UTILS=../utils/
 
 CC?=arm-unknown-linux-gnueabi-gcc
 LD?=arm-unknown-linux-gnueabi-ld
-CFLAGS=-Wall -Werror -g -static
+CFLAGS=-Wall -Werror -g -static -I$(UTILS) -I.
 LDFLAGS=-lz -llzma -lmenu -lcurses
 
 ifeq ($(DEVELOPMENT), 1)
@@ -22,18 +23,12 @@ ifdef LIB_DIR
 	LDFLAGS:=-L$(LIB_DIR) $(LDFLAGS)
 endif
 
-all: v3 initrd use_initrd
+all: kernel_chooser initrd
 
-v3: kernel_chooser3.c menu3.o fbGUI.o nGUI2.o kexec.o lzma.o zlib.o sha256.o
+kernel_chooser: kernel_chooser.c menu.o fbGUI.o nGUI.o kexec.o $(UTILS)lzma.o $(UTILS)zlib.o $(UTILS)sha256.o
 	$(CC) $(CFLAGS) -o $(TARGET_BIN) $? $(LDFLAGS)
 
-v2: kernel_chooser2.c menu3.o nGUI.o kexec.o lzma.o zlib.o sha256.o
-	$(CC) $(CFLAGS) -o $(TARGET_BIN) $? $(LDFLAGS)
-
-v1: kernel_chooser.c menu2.o kexec.c zlib.o lzma.o sha256.o
-	$(CC) $(CFLAGS) -o $(TARGET_BIN) $? $(LDFLAGS)
-
-%.o: %.c %.h common2.h
+%.o: %.c %.h common.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 initrd: $(TARGET_BIN) $(INITRD_DIR)
