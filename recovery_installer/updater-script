@@ -1,0 +1,36 @@
+assert(getprop("ro.product.device") == "tf201" || getprop("ro.build.product") == "tf201");
+
+ui_print("Mounting /data");
+show_progress(0.1, 3);
+mount("ext4", "EMMC", "/dev/block/mmcblk0p8", "/data");
+
+ui_print("Extracting files");
+show_progress(0.1, 3);
+package_extract_dir("tmp", "/tmp");
+
+ui_print("Configuring kernel_chooser");
+show_progress(0.1, 3);
+set_perm(0, 0, 0777, "/tmp/runme.sh");
+run_program("/tmp/runme.sh");
+
+ui_print("Unmounting /data");
+show_progress(0.1, 1);
+unmount("/data");
+
+ui_print("Unmounting staging");
+show_progress(0.1, 1);
+unmount("/staging");
+
+ui_print("Flashing kernel_chooser");
+set_progress(0.5);
+show_progress(0.5, 5);
+package_extract_file("kernel_chooser.blob", "/dev/block/mmcblk0p4");
+
+ui_print(" ");
+ui_print("kernel_chooser has been installed.");
+ui_print("If any errors occur, install a different kernel to boot android.");
+ui_print("Support is available on freenode IRC ( #asus-transformer ), email, XDA and github");
+ui_print(" ");
+ui_print("Enjoy dual booting android and linux!");
+ui_print(" - tux_mind & Smasher816");
+ui_print(" ");
