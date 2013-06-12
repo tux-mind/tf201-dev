@@ -36,6 +36,7 @@ initrd: $(TARGET_BIN) $(INITRD_DIR)
 	cd $(INITRD_DIR); find . | cpio --create --format='newc' > ../$(INITRD); gzip -f ../$(INITRD)
 
 use_initrd:
+	if [ ! -d ../test ]; then mkdir ../test; fi
 	cp $(INITRD).gz ../test/initramfs.gz
 	../scripts/reflash_kernel.sh
 
