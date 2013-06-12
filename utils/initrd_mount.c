@@ -141,7 +141,6 @@ int initrd_extract(char *file, const char *dest)
  */
 int initrd_mount(char *file, const char *mountpoint)
 {
-	umount(mountpoint);
 	if(mount("tmpfs",mountpoint,"tmpfs",MS_RELATIME,""))
 		return -1;
 	if(initrd_extract(file,mountpoint))

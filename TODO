@@ -5,3 +5,4 @@ root_chooser: have to free() all from forked childs ( like shell and mdev ). i k
 root_chooser: add support for fat filesystems
 all: try to have a chrooted android system and use root_chooser for boot it. ( multiple android "roms" on the same device )
 all: reorganize common sources.
+Makefile: the first time it compiles it skip the first .c file....
