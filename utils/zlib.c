@@ -86,3 +86,22 @@ char *zlib_decompress_file(const char *filename, off_t *r_size)
 	*r_size =  size;
 	return buf;
 }
+
+int read_first_bytes_of_archive(char *file, char *dest, int len)
+{
+			gzFile fp;
+			int ret;
+			
+			fp = gzopen(file, "rb");
+			if(!fp)
+					return -1;
+			do
+			{
+					ret = gzread(fp,dest,len);
+			} while( ret < 0 && ((errno == EINTR) || (errno == EAGAIN)));
+			gzclose(fp);
+			
+			if ( ret == len )
+					return 0;
+			return -1;
+}

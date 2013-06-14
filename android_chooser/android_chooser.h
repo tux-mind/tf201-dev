@@ -31,8 +31,3 @@
 							exit(EXIT_FAILURE);
 #define EXIT_ERROR(args...)	do{ fprintf(logfile,##args); fflush(logfile); EXIT_SILENT }while(0)
 #define EXIT_ERRNO(format,args...)	EXIT_ERROR(format " - %s\n",##args ,strerror(errno))
-//from loop_mount3.c
-int try_loop_mount(char **, const char *);
-int set_loop(const char *, char *,int *);
-//from initrd_mount.c
-int try_initrd_mount(char **, const char *);

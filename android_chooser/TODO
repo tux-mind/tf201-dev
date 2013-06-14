@@ -1,6 +1,6 @@
 support tmpfs as target "image"
 support a wipe option that erase the whole disk
-make functions to remove mounpoints in case of failure ( check all TODO in android_chooser.c )
 be sure that any android boot image have an /fstab.$hardware file
 be sure that there isn't a smarter way to do this
 make Docs
+mmmm...how can i tell android to mount an initrd archive? who will really use this function ?
