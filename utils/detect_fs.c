@@ -1,12 +1,12 @@
-/* Part of this code has been taken from 
- * disktype - http://disktype.sourceforge.net
- * thanks to chrisp@users.sourceforge.net
+/* looking at the file(1) sources,
+ * you can find the plain-text magic database.
  * as usually, open source rocks ;)
  */
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 #include "detect_fs.h"
 
 typedef signed char s1;
@@ -32,6 +32,8 @@ u4 get_le_long(void *from)
     (u4)p[0];
 }
 
+extern FILE *logfile;
+
 const char *find_filesystem(char *file)
 {
 	char buffer[BUFFER_SIZE];
@@ -39,7 +41,7 @@ const char *find_filesystem(char *file)
 
 	if((fd = open(file,O_RDONLY)) < 0)
 			return NULL;
-	if(read(fd,buffer,1024) < 0)
+	if(read(fd,buffer,BUFFER_SIZE) < 0)
 	{
 			close(fd);
 			return NULL;
@@ -47,33 +49,16 @@ const char *find_filesystem(char *file)
 	close(fd);
 	
 	// check for linux ext FS
-	
-	len = strlen(FS_EXT_MAGIC);
-	if(!strncmp(buffer + FS_EXT_OFFSET,FS_EXT_MAGIC,len))
+	if(FS_EXT(buffer))
 	{
-		if(!(get_le_long(buffer + EXT3_TEST1_OFF) & EXT3_TEST1_VAL) &&
-					!(get_le_long(buffer + EXT3_TEST2_OFF) & EXT3_TEST2_VAL))
+		if(!EXT_JOURNAL(buffer))
 			return "ext2";
-		else if (	get_le_long(buffer + EXT4_TEST1_OFF) & EXT4_TEST1_VAL ||
-						get_le_long(buffer + EXT4_TEST2_OFF) & EXT4_TEST2_VAL || 
-						get_le_short(buffer + EXT4_TEST3_OFF) >= EXT4_TEST3_VAL)
-			return "ext4";
-		else
+		else if (EXT_SMALL_INCOMPAT(buffer) && EXT_SMALL_RO_COMPAT(buffer))
 			return "ext3";
-	}
-	
-	// check for DOS FAT FS
-	
-	len = get_le_short(buffer+FAT_SECTORSIZE_OFF);
-	clustersize = buffer[FAT_CLUSTERSIZE_OFF];
-	if(	(len==512 || len==1024 || len==2048 || len==4096 ) &&
-		(clustersize != 0 && !(clustersize & (clustersize - 1))))
-	{
-		if(memcmp(buffer+NTFS_TEST_OFF,NTFS_TEST_VAL,strlen(NTFS_TEST_VAL)))
-			return "vfat";
 		else
-			return "ntfs";
+			return "ext4";
 	}
 	// TODO: detect others FS
+	errno=EOPNOTSUPP;
 	return NULL;
 }

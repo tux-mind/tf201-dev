@@ -12,8 +12,6 @@ void free_mountpoint(mountpoint *item)
 {
   if(item->mountpoint)
     free(item->mountpoint);
-  if(item->android_blkdev)
-    free(item->android_blkdev);
   if(item->blkdev)
     free(item->blkdev);
   free(item);
@@ -48,7 +46,6 @@ mountpoint *add_mountpoint(mountpoint *list, char *_blkdev, char *_mountpoint)
 	item->blkdev = _blkdev;
 	item->blkdev_fd = item->processed = item->s_type = item->options = 0;
 	item->filesystem = NULL;
-	item->android_blkdev = NULL;
 	item->next = NULL;
 	return list;
 }

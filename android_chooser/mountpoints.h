@@ -1,3 +1,6 @@
+#define DEFAULT_TYPE DIRECTORY
+#define DEFAULT_OPTS BIND|WAIT
+
 typedef enum {
 	NONE = 0,
 	BLKDEV = 1,
@@ -24,7 +27,6 @@ extern const char *options_str[];
  */
 typedef struct _mountpoint {
 	char *mountpoint,
-		*android_blkdev,
 		*blkdev;
 	const char *filesystem;
 	_options options;

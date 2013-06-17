@@ -2,6 +2,7 @@
 #define DATADIR_STRLEN 7
 #define LOG "/android_chooser.log"
 #define PERSISTENT_LOG "/.data/android_chooser.log"
+#define FSTAB_PERSISTENT "/.data/ac_fstab"
 #define BUSYBOX "/bin/busybox"
 #define MAX_LINE 255
 #define TIMEOUT 5 /* time to wait for external block devices ( USB stick ) */

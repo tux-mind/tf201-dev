@@ -99,7 +99,7 @@ int read_cmdline(char *dest)
  */
 int fstab_parser(char *file, mountpoint **list )
 {
-  char line[MAX_LINE],*pos,*source,*dest;
+  char line[MAX_LINE],*pos,*start,*source,*dest;
   FILE *fp;
   int len,line_no;
   
@@ -110,10 +110,15 @@ int fstab_parser(char *file, mountpoint **list )
   {
 	line_no++;
 	fgets_fix(line);
-    for(len=0,pos=line;*pos!='\0'&&!isspace(*pos);pos++,len++);
+	//skip spaces
+	for(start=line;*start!='\0'&&isspace(*start);start++);
+	if(*start=='\0'||*start=='#') // skip comments and empty lines
+		continue;
+    for(len=0,pos=start;*pos!='\0'&&!isspace(*pos);pos++,len++);
     if(!len)
     {
-		fprintf(logfile,"empty source at line #%d\n",line_no);
+		fprintf(logfile,"no source at line #%d\n",line_no);
+		fclose(fp);
 		return -1;
 	}
     source = malloc(len+1);
@@ -122,11 +127,17 @@ int fstab_parser(char *file, mountpoint **list )
 		fclose(fp);
 		return -1;
 	}
-    strncpy(source,line,len);
+    strncpy(source,start,len);
 	*(source+len) = '\0';
-	// skip spaces and trailing '/'
-	for(;*pos!='\0'&&(!isspace(*pos)||*pos=='/');pos++);
+	for(;*pos!='\0'&&isspace(*pos);pos++);
     for(len=0;*pos!='\0'&&!isspace(*pos);pos++,len++);
+	if(!len)
+    {
+		fprintf(logfile,"no mountpoint at line #%d\n",line_no);
+		free(source);
+		fclose(fp);
+		return -1;
+	}
 	dest = malloc(len+1);
 	if(!dest)
 	{
@@ -161,45 +172,6 @@ const char *find_android_fstab(void)
 	}
 	snprintf(path,MAX_LINE,"/%s",de->d_name);
 	return path;
-}
-
-int find_android_blockdev(mountpoint *list,const char *android_fstab)
-{
-	FILE *fp;
-	char line[MAX_LINE],*start,*pos;
-	int len1,len2;
-	mountpoint *current;
-	
-	if(!list)
-		return 0;
-	else if(!android_fstab)
-		return -1;
-	fp = fopen(android_fstab,"r");
-	if(!fp)
-		return -1;
-	while(fgets(line,MAX_LINE,fp))
-	{
-		for(start=line;start!='\0'&&isspace(*start);start++);
-		if(*start == '#' || *start=='\0') // skip comments and empty lines
-			continue;
-		fgets_fix(line);
-		for(len1=0,pos=start;*pos!='\0'&&!isspace(*pos);pos++,len1++);
-		//skip spaces
-		for(;*pos!='\0'&&isspace(*pos);pos++);
-		for(len2=0;*pos!='\0'&&!isspace(*pos);pos++,len2++);
-		*pos='\0'; // truncate for strncmp
-		//search in list
-		for(current=list;current;current=current->next)
-			if(!strncmp((pos-len2),current->mountpoint,len2+1))
-			{
-				current->android_blkdev = malloc(len1+1);
-				if(!current->android_blkdev)
-					return -1;
-				memcpy(current->android_blkdev,start,len1);
-				*(current->android_blkdev+len1) = '\0';
-			}
-	}
-	return 0;
 }
 
 source_type find_file_type(char *file, struct stat info)
@@ -263,29 +235,33 @@ source_type find_file_type(char *file, struct stat info)
 int get_source_infos(mountpoint *item, char *source)
 {
 		struct stat info;
-		char buffer[MAX_LINE];
 		
 		if(stat(source,&info))
+		{
+			// probably it's something created by the android boot process
+			item->s_type = DEFAULT_TYPE;
+			item->options = DEFAULT_OPTS;
 			return 1;
+		}
 		item->s_type = find_file_type(source,info);
 		if(item->s_type == NONE)
 		{
-			fprintf(logfile,"find_file_type \"%s\" - %s",source,strerror(errno));
+			fprintf(logfile,"find_file_type \"%s\" - %s\n",source,strerror(errno));
 			return -1;
 		}
 		else if(item->s_type == IMAGE_FILE || item->s_type == BLKDEV)
 		{
-			item->filesystem = find_filesystem(buffer);
+			item->filesystem = find_filesystem(source);
 			if(!item->filesystem)
 			{
-				fprintf(logfile,"find_filesystem \"%s\" - %s",buffer,strerror(errno));
+				fprintf(logfile,"find_filesystem \"%s\" - %s\n",source,strerror(errno));
 				return -1;
 			}
 		}
 		switch (item->s_type) // set options
 		{
 			case DIRECTORY:
-				item->options = BIND|WAIT;
+				item->options = BIND;
 				break;
 			case BLKDEV:
 				item->options = WAIT;
@@ -299,11 +275,12 @@ int get_source_infos(mountpoint *item, char *source)
 //			if yes we have to bind them.
 int get_mountpoint_infos(mountpoint *item)
 {
-	char buffer[MAX_LINE];
+	char buffer[MAX_LINE],*pos;
 	int len;
 	
 	// prepare path
-	snprintf(buffer,MAX_LINE,"%s%s",DATADIR,item->blkdev);
+	for(pos=item->blkdev;*pos!='\0'&&*pos=='/';pos++); // skip leading '/'
+	snprintf(buffer,MAX_LINE,"%s%s",DATADIR,pos);
 	// test if file it's an absolute path
 	if((len = get_source_infos(item,item->blkdev)) < 0)
 		return -1;
@@ -548,7 +525,12 @@ int change_android_fstab(mountpoint *list,const char * android_fstab)
 			if(current)
 			{
 				// overwrite fs type
-				strncpy(record.type,current->filesystem,MAX_LINE);
+				if(current->filesystem)
+					strncpy(record.type,current->filesystem,MAX_LINE);
+				else
+					strncpy(record.type,"none",5);
+				// overwrite blockdevice
+				strncpy(record.blkdev,current->blkdev,MAX_LINE);
 				// modify mnt_flags
 				if(current->options & BIND)
 				{
@@ -596,6 +578,9 @@ int change_android_fstab(mountpoint *list,const char * android_fstab)
 	fclose(fp);
 	copy(TMP_FSTAB,(char *)android_fstab);
 	unlink(TMP_FSTAB);
+#ifdef FSTAB_PERSISTENT
+	copy((char *)android_fstab,FSTAB_PERSISTENT);
+#endif
 	return 0;
 }
 
@@ -711,12 +696,18 @@ int main(int argc, char **argv)
 	}
 	free(fstab_path);
 	android_fstab = find_android_fstab();
-	if(find_android_blockdev(list,android_fstab))
-		EXIT_ERRNO("find_android_blockdev");
 	if((list = check_list(list)) == NULL)
 		EXIT_ERRNO("check_list");
 	if((list = loop_binder(list)) == NULL)
 		EXIT_ERRNO("loop_binder");
+#ifdef DEBUG
+	mountpoint *tmp;
+	fprintf(logfile,"DEBUG - entries:\n");
+	for(tmp=list;tmp;tmp=tmp->next)
+		fprintf(logfile,"%s, %s, %s, %d, %d, %d, %d\n",
+				tmp->mountpoint,tmp->blkdev,tmp->filesystem,
+				(int)tmp->options,tmp->processed,tmp->blkdev_fd,(int)tmp->s_type);
+#endif
 	if(change_android_fstab(list,android_fstab))
 		EXIT_ERRNO("change_android_fstab");
 	fclose(logfile);
