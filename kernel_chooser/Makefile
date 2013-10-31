@@ -8,7 +8,7 @@ UTILS=../utils/
 
 CC?=arm-unknown-linux-gnueabi-gcc
 LD?=arm-unknown-linux-gnueabi-ld
-CFLAGS=-Wall -Werror -g -static -I$(UTILS) -I.
+CFLAGS=-Wall -Werror -g -static -I$(UTILS)
 LDFLAGS=-lz -llzma -lmenu -lcurses
 
 ifeq ($(DEVELOPMENT), 1)
