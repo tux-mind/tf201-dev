@@ -342,19 +342,32 @@ int parser(char *file, char *fallback_name, menu_entry **list)
 	return -1;
 }
 
-void take_console_control(void)
+int take_console_control(void)
 {
-	int i;
+	int i,j;
 	close(0);
 	close(1);
 	close(2);
-	setsid();
-	if((i = open(CONSOLE,O_RDWR|O_NOCTTY)) >= 0)
-	{
-		(void) ioctl(i, TIOCSCTTY, 1);
-		dup(i);
-		dup(i);
-	}
+	if(setsid() < 0)
+		return -1;
+	if((i = open(CONSOLE,O_RDWR|O_NOCTTY)) < 0)
+		return -1;
+	if(ioctl(i, TIOCSCTTY, 1) < 0)
+		return -1;
+#ifdef DEBUG
+	j=2;
+#else
+	j=1;
+#endif
+	for(;j>=0;j--)
+		if(dup2(i,j)<0)
+			return -1;
+	return 0;
+}
+
+void try_take_console_control(void)
+{
+	(void)take_console_control();
 }
 
 /** open console for the first time
@@ -379,7 +392,8 @@ int open_console(void)
 			return -1;
 		}
 	}
-	take_console_control();
+	if(take_console_control())
+		return -1;
 	return 0;
 }
 
@@ -475,11 +489,12 @@ void shell(void)
 	char *sh_argv[] = SHELL_ARGS;
 	pid_t pid;
 	if (!(pid = fork())) {
-		take_console_control();
+		if(take_console_control())
+			exit(EXIT_FAILURE);
 		execv(BUSYBOX, sh_argv);
 	}
 	waitpid(pid,NULL,0);
-	take_console_control();
+	try_take_console_control();
 }
 #endif
 
@@ -488,11 +503,12 @@ void screenshot()
 	nc_save();
 	pid_t pid;
 	if (!(pid = fork())) {
-		take_console_control();
+		if(take_console_control())
+			exit(EXIT_FAILURE);
 		execl("/bin/busybox","cp", "-p", "/dev/fb0", "/data/fb0.dump", NULL);
 	}
 	waitpid(pid,NULL,0);
-	take_console_control();
+	try_take_console_control();
 	nc_load();
 }
 
