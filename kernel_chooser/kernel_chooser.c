@@ -43,7 +43,6 @@
 #include <sys/reboot.h>
 #include <termios.h>
 #include <ctype.h>
-#include <unistd.h>
 
 #include "common.h"
 #include "menu.h"
