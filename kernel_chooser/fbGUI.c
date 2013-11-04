@@ -19,7 +19,7 @@ uint8_t *bkgdp; // pointer to a copy of the screen containing the background
 void fb_init()
 {
 		fbinfo.fbfd = open(FBDEV, O_RDWR);
-		if (!fbinfo.fbfd) {
+		if (fbinfo.fbfd < 0) {
 			FATAL("cannot open framebuffer device (%s)\n", FBDEV);
 		}
 		if (ioctl(fbinfo.fbfd, FBIOGET_FSCREENINFO, &fbinfo.finfo)) {
@@ -54,7 +54,7 @@ void fb_background()
 	pixel *pos;
 	struct stat bg_stat;
 
-	if(!(fd = open(BACKGROUND,O_RDONLY)))
+	if((fd = open(BACKGROUND,O_RDONLY)) < 0)
 	{
 		//only a warning, default to black background when not found
 		WARN("cannot open \"%s\" - %s\n",BACKGROUND,strerror(errno));
@@ -90,6 +90,7 @@ void fb_background()
 	if (!bkgdp)
 	{
 		FATAL("malloc - %s\n",strerror(errno));
+		free(source);
 		return;
 	}
 
